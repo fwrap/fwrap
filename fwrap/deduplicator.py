@@ -95,6 +95,8 @@ def get_templated_cy_arg(args, template_mgr):
         extra = ('npy_enum',)
     elif cls in (cy_wrap._CyArg, cy_wrap._CyCmplxArg):
         cls = TemplatedCyArg
+    elif cls == cy_wrap._CySingleCharArg:
+        cls = cy_wrap._CySingleCharArg
     elif cls == cy_wrap._CyErrStrArg:
         cls = cy_wrap._CyErrStrArg
     else:
