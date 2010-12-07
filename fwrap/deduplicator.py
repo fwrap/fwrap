@@ -56,19 +56,22 @@ def cy_create_template(procs, cfg):
     template_mgr = create_template_manager(cfg)
     merged_attrs = merge_node_attributes(procs, template_mgr,
                                          exclude=('in_args', 'out_args', 'call_args',
-                                                  'all_dtypes_list'))
+                                                  'aux_args', 'all_dtypes_list'))
 
     in_args = cy_merge_args([proc.in_args for proc in procs], template_mgr)
     out_args = cy_merge_args([proc.out_args for proc in procs], template_mgr)
     call_args = cy_merge_args([proc.call_args for proc in procs], template_mgr)
+    aux_args = cy_merge_args([proc.aux_args for proc in procs], template_mgr)
     
-    return TemplatedProcedure(template_mgr=template_mgr,
-                              in_args=in_args,
-                              out_args=out_args,
-                              call_args=call_args,
-                              all_dtypes_list=sum([proc.all_dtypes() for proc in procs], []),
-                              names=[proc.cy_name for proc in procs],
-                              **merged_attrs)
+    result = TemplatedProcedure(template_mgr=template_mgr,
+                                in_args=in_args,
+                                out_args=out_args,
+                                call_args=call_args,
+                                aux_args=aux_args,
+                                all_dtypes_list=sum([proc.all_dtypes() for proc in procs], []),
+                                names=[proc.cy_name for proc in procs],
+                                **merged_attrs)
+    return result
 
 def cy_merge_args(arg_lists, template_mgr):
     if not all_equal(len(lst) for lst in arg_lists):
