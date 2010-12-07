@@ -214,6 +214,8 @@ class CToCython(object):
 
         def handle_var(s, loc, tok):
             v = tok[0]
+            if v.endswith('_capi'):
+                raise prs.ParseException('References f2py-specific variable "%s"' % v)
             self.encountered.add(v)
             return '%%(%s)s' % v
 
@@ -278,8 +280,6 @@ class CToCython(object):
             r = self.translator.parseString(s)[0]
         except prs.ParseException, e:
             raise ValueError('Could not auto-translate: %s (%s)' % (s, e))            
-        except KeyError, e:
-            raise ValueError('Referenced unknown symbol: %s (%s)' % (s, e))            
         if r[0] == '(' and r[-1] == ')':
             r = r[1:-1]
         return CythonExpression(r, self.encountered)
@@ -289,5 +289,5 @@ class CToCython(object):
             return self.translate(s)
         except ValueError, e:
             warn('Problem in %s: %s' % (func_name, e))
-            return '##TODO: %s' % s
+            return CythonExpression('##TODO: %s' % s, [])
         
