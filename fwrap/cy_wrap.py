@@ -215,7 +215,8 @@ class _CyArgBase(AstNode):
                 return False
         result = self.equal_attributes(other_arg,
                                        [x for x in self.attributes
-                                        if x not in ('dtype', 'ktp', 'npy_enum')])
+                                        if x not in ('dtype', 'ktp', 'npy_enum',
+                                                     'name', 'cy_name')])
         return result
 
     def is_optional(self):

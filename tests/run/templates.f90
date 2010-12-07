@@ -70,30 +70,30 @@ end subroutine
 ! single, non-array argument
 !
 
-subroutine slass(x, flag)
+subroutine slass(sx, flag)
   implicit none
-  real, intent(inout) :: x
+  real, intent(inout) :: sx
   character, intent(in) :: flag
-  x = x * 2
+  sx = sx * 2
 end subroutine
 
-subroutine dlass(x, flag)
+subroutine dlass(dx, flag)
   implicit none
-  double precision, intent(inout) :: x
+  double precision, intent(inout) :: dx
   character, intent(in) :: flag
-  x = x * 2
+  dx = dx * 2
 end subroutine
 
-subroutine class(x, flag)
+subroutine class(cx, flag)
   implicit none
-  complex, intent(inout) :: x
+  complex, intent(inout) :: cx
   character, intent(in) :: flag
-  x = x * 2
+  cx = cx * 2
 end subroutine
 
-subroutine zlass(x, flag)
+subroutine zlass(zx, flag)
   implicit none
-  double complex, intent(inout) :: x
+  double complex, intent(inout) :: zx
   character, intent(in) :: flag
-  x = x * 2
+  zx = zx * 2
 end subroutine
