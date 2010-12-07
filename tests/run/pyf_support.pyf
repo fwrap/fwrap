@@ -67,11 +67,11 @@ python module pyf_support
         end subroutine
 
         subroutine sdefault(z)
-          real :: z = 1.
+          real, intent(in,out) :: z = 1.
         end subroutine
 
         subroutine cdefault(z)
-          complex :: z = (1., 0.)
+          complex, intent(in,out) :: z = (1., 0.)
         end subroutine
 
     end interface 

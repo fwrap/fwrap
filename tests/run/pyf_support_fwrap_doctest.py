@@ -147,7 +147,9 @@ Function masquerading as subroutine:
 Default arguments:
 
     >>> sdefault()
+    2.0
     >>> cdefault()
+    (2+0j)
 
 
 """
