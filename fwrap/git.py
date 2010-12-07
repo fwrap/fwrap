@@ -13,7 +13,8 @@ def execproc(cmd, get_err=False):
     err = pp.stderr.read()
     retcode = pp.wait()
     if retcode != 0:
-        raise RuntimeError('Return code %d: %s' % (retcode, ' '.join(cmd)))
+        raise RuntimeError('Return code %d: %s\nError log:\n%s' % (retcode, ' '.join(cmd),
+                                                                   err))
     if get_err:
         return result, err
     else:
