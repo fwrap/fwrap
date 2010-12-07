@@ -1,3 +1,4 @@
+C configure-flags: --f77binding
 
       subroutine testone(m_hidden, m, n, arr)
       implicit none

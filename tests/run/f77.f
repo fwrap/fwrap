@@ -1,3 +1,4 @@
+C configure-flags: --f77binding
 
       subroutine int_default(i1,i2,i3)
       implicit none

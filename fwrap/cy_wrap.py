@@ -621,11 +621,10 @@ class _CyArrayArg(_CyArgBase):
                     requires |= set(dimrequires)
                     dimexprs.append(dimexpr)
             else:
-                raise NotImplementedError()
-                # With .pyf, C expressions can be used directly
-                # Otherwise, only very simplest cases supported.
-                # TODO: Fix this up (compile Fortran-side function to give
-                # resulting shape?)
+                # If Fortran statements have not been parsed and
+                # translated, we only support the simplest cases.
+                # TODO: Fix this up (compile Fortran-side function to
+                # give resulting shape?)
                 for i, expr in enumerate([dim.sizeexpr for dim in self.dimension]):
                     m = plain_sizeexpr_re.match(expr)
                     if not m:
@@ -634,6 +633,7 @@ class _CyArrayArg(_CyArgBase):
                             'as expression is too complicated: %s' % expr)
                         can_allocate = False
                     dimexprs.append(_py_kw_mangler(m.group(1)))
+                requires |= set(dimexprs)
             d['shape'] = ', '.join(dimexprs)
 
         # Figure out the copy flag
