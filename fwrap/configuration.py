@@ -44,6 +44,7 @@ configuration_dom = {
         'sha1' : (ATTR, r'^[0-9a-f]*$', None, {}),
         }),
     'exclude' : (LIST_ITEM, r'^[a-zA-Z0-9_]+$', None, {}),
+    'template' : (LIST_ITEM, r'^[a-zA-Z0-9_,]+$', None, {}),
     'f77binding' : (ATTR, parse_bool, False, {}),
     'detect-templates' : (ATTR, parse_bool, False, {}),
     'auxiliary' : (LIST_ITEM, r'^.+$', None, {}),
@@ -60,6 +61,10 @@ def add_cmdline_options(add_option):
     add_option('--detect-templates', action='store_true',
                help='detect procs repeated with different types '
                'and output .pyx.in Tempita template instead of .pyx')
+    add_option('--template', type=str, action='append', metavar='NAME,NAME[,NAME,...]',
+               default=[],
+               help='comma-seperated list of routines that makes up a template '
+               '(in addition to the auto-detected ones)')
     add_option('--dummy', action='store_true',
                help='dummy development configuration option')
     
@@ -68,6 +73,7 @@ def _document_from_cmdline_options(options):
     return {
         'f77binding' : options.f77binding,
         'detect-templates' : options.detect_templates,
+        'template' : [(x, {}) for x in options.template]
          }
 
 #
@@ -77,7 +83,7 @@ def _document_from_cmdline_options(options):
 class Configuration:
     # In preferred order when serializing:
     keys = ['version', 'vcs', 'wraps', 'exclude', 'f77binding', 'detect-templates',
-            'auxiliary']
+            'template', 'auxiliary']
 
     @staticmethod
     def create_from_file(filename):
@@ -213,6 +219,9 @@ class Configuration:
         routines.sort()
         self.exclude.extend([(routine, {})
                              for routine in routines])
+
+    def get_templates(self):
+        return [x.split(',') for x, attr in self.template]
 
 
 #

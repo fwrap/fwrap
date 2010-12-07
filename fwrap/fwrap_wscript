@@ -12,6 +12,7 @@ def options(opt):
     opt.add_option('--pyf', action='store')
     opt.add_option('--f77binding', action='store_true', default=False)
     opt.add_option('--detect-templates', action='store_true', default=False)
+    opt.add_option('--template', action='append')
     opt.load('compiler_c')
     opt.load('compiler_fc')
     opt.load('python')
@@ -43,6 +44,7 @@ def configure(conf):
     conf.env['FW_PROJ_NAME'] = conf.options.name
     conf.env['FW_F77_BINDING'] = conf.options.f77binding
     conf.env['FW_DETECT_TEMPLATES'] = conf.options.detect_templates
+    conf.env['FW_TEMPLATE'] = conf.options.template
     conf.env['FWRAPPER_OPTS'] = ''
     conf.env['FW_PYF'] = conf.options.pyf
 
@@ -71,6 +73,7 @@ def build(bld):
         flags.append('--f77binding')
     if detect_templates:
         flags.append('--detect-templates')
+    flags.extend('--template=%s' % x for x in bld.env['FW_TEMPLATE'])
     if bld.env['FW_PYF']:
         flags.append('--pyf=%s' % bld.env['FW_PYF'])
 

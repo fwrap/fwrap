@@ -33,6 +33,7 @@ def cy_deduplify(cy_ast, cfg):
     name_to_proc = dict((proc.name, proc) for proc in cy_ast)
     procnames = name_to_proc.keys()
     groups = find_candidate_groups_by_name(procnames)
+    groups.extend(cfg.get_templates())
     for names_in_group in groups:
         procs = [name_to_proc[name] for name in names_in_group]
         try:
