@@ -58,6 +58,8 @@ def generate_fc_h(ast, ktp_header_name, buf, cfg):
 
 def generate_interface(proc, buf, cfg, gmn=constants.KTP_MOD_NAME):
     if cfg.f77binding:
+        if proc.kind == 'function':
+            buf.putln(proc.return_arg.declaration(cfg))
         buf.putln('external %s' % proc.name)
     else:
         buf.putln('interface')
