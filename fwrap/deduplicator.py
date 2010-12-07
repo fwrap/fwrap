@@ -115,7 +115,10 @@ blas_re = re.compile(r'^([sdcz])([a-z0-9_]+)$')
 def find_candidate_groups_by_name(names):
     """Find candidate groups of procedures by inspecting procedure name
 
-    For now, just use BLAS/LAPACK conventions. TODO: Pluggable API for this?
+    For now, just use BLAS/LAPACK conventions:
+     - Names common except leading [sdcz] character match:
+       sgemm, dgemm, cgemm, zgemm
+     - Trailing u/c ignored: sdot, ddot, cdotc, cdotu, zdotc, zdotu match
     
     Input:
     List of procedure names
@@ -128,7 +131,8 @@ def find_candidate_groups_by_name(names):
     (currently, reorders in the sX, dX, cX, zX order).
     """
     groups = {}
-    
+
+    # Group all names starting with [sdcz] by the rest of the name
     for name in names:
         m = blas_re.match(name)
         if m is not None:
@@ -138,11 +142,25 @@ def find_candidate_groups_by_name(names):
                 lst = groups[stem] = []
             lst.append(name)
 
+    # Combine groups of the kind
+    # ['sdot', 'ddot'], ['cdotc', 'zdotc'], ['cdotu', 'zdotu']
+    toremove = []
+    for stem, lst in groups.iteritems():
+        if len(lst) == 2 and lst[0][0] in ('s', 'd') and lst[1][0] in ('s', 'd'):
+            # Only have the two real functions; look for corresponding
+            # complex versions with trailing conjugate-version suffix
+            for suffix in ('c', 'u'):
+                clst = groups.get(stem + suffix, None)
+                if clst is not None:
+                    toremove.append(stem + suffix)
+                    lst.extend(clst)
+    for key in toremove:
+        del groups[key]
+
     result = []
     for stem, proclst in groups.iteritems():
         if len(proclst) > 1:
-            assert len(proclst) <= 4
-            proclst.sort(key=lambda name: 'sdcz'.index(name[0]))
+            proclst.sort(key=lambda name: ('sdcz'.index(name[0]), name[1:]))
             result.append(proclst)
 
     return result

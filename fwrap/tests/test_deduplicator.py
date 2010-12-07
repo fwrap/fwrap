@@ -30,6 +30,10 @@ def test_grouping():
                              [['sbar', 'dbar', 'cbar'],
                               ['sfoo', 'cfoo', 'zfoo']])
 
+    eq_(find_candidate_groups_by_name(
+        ['sbar', 'dbar', 'cbaru', 'zbaru', 'cbarc', 'zbarc']),
+        [['sbar', 'dbar', 'cbarc', 'cbaru', 'zbarc', 'zbaru']])
+
 def test_template_manager():
     mgr = TemplateManager()
     mgr.add_variable([1, 2, 3], 'myname')
