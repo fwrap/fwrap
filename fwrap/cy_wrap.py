@@ -166,7 +166,7 @@ For usage information see the function docstrings.
     # Functions
     names = []
     for proc in ast:
-        names.extend(proc.get_names())
+        names.append(', '.join(proc.get_names()))
     names.sort()
     names = ["%s(...)" % name for name in names]
     dstring += names
