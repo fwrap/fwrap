@@ -1042,6 +1042,14 @@ class CythonExpression(object):
     def substitute(self, variable_map):
         return self.template % variable_map, [variable_map[x] for x in self.requires]
 
+    def is_literal(self):
+        try:
+            self.as_literal()
+        except ValueError:
+            return False
+        else:
+            return True
+
     def as_literal(self):
         try:
             expr, requires = self.substitute({})

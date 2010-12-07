@@ -144,6 +144,10 @@ Function masquerading as subroutine:
     >>> a_function(-1)
     (-1, 12)
 
+Default arguments:
+
+    >>> sdefault()
+    >>> cdefault()
 
 
 """

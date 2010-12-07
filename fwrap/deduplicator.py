@@ -37,7 +37,8 @@ def cy_deduplify(cy_ast, cfg):
         procs = [name_to_proc[name] for name in names_in_group]
         try:
             template_node = cy_create_template(procs, cfg)
-        except UnableToMergeError:
+        except UnableToMergeError, e:
+            raise UnableToMergeError("Can not merge %r:\n%s" % (names_in_group, e))
             continue
         # Insert the created template at the position
         # of the *first* routine, and remove the other
@@ -75,12 +76,12 @@ def cy_create_template(procs, cfg):
 
 def cy_merge_args(arg_lists, template_mgr):
     if not all_equal(len(lst) for lst in arg_lists):
-        raise UnableToMergeError()
+        raise UnableToMergeError("Unequal length of argument lists")
     for matched_args in zip(*arg_lists):
         arg0 = matched_args[0]
         for arg in matched_args[1:]:
             if not arg0.equal_up_to_type(arg):
-                raise UnableToMergeError()
+                raise UnableToMergeError("Not equal:\n%r\n%r" % (arg0, arg))
 
     merged_args = [get_templated_cy_arg(matched_args,
                                         template_mgr)

@@ -58,14 +58,20 @@ python module pyf_support
           integer intent(hide) :: b = c + 1
           callstatement (*f2py_func)(&aux_arg, &b, (b>10)?"A":"B")
         end function
-
-
         
         subroutine a_function(y, x)
           ! Function masquerading as subroutine in pyf
           integer, intent(out) :: x
           integer, intent(in,out) :: y
           callstatement (*f2py_func)(&x, &y)
+        end subroutine
+
+        subroutine sdefault(z)
+          real :: z = 1.
+        end subroutine
+
+        subroutine cdefault(z)
+          complex :: z = (1., 0.)
         end subroutine
 
     end interface 

@@ -104,3 +104,13 @@ C     Then do arr = arange(m*n).reshape(m, n)
       integer y
       a_function = 13 + y
       end function
+
+      subroutine sdefault(z)
+      real z
+      z = z * 2
+      end subroutine
+
+      subroutine cdefault(z)
+      complex z
+      z = z * 2
+      end subroutine

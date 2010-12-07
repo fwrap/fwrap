@@ -109,12 +109,8 @@ def mergepyf_proc(f_proc, pyf_proc):
                        pyf_check=None)
         if arg.pyf_default_value is not None:
             defval = arg.pyf_default_value
-            if literal_re.match(defval) is not None:
-                defer = False
-                cy_default_value = CythonExpression(defval, ())
-            else:
-                defer = True
-                cy_default_value = c_to_cython.warn_translate(defval, func_name)
+            cy_default_value = c_to_cython.warn_translate(defval, func_name)
+            defer = not cy_default_value.is_literal()
             arg.update(cy_default_value=cy_default_value,
                        pyf_default_value=None,
                        defer_init_to_body=defer)
@@ -175,9 +171,6 @@ def auxiliary_arg(f_arg, expr):
         pyf_hide=True,
         cy_default_value=expr)
     return arg
-
-literal_re = re.compile(r'^-?[()0-9.,\s]+$') # close enough; also matches e.g. (0, 0.)
-#default_array_value_re = re.compile(r'^[()0.,\s]+$') # variations of zero...
 
 def process_in_args(in_args, c_to_cython):
     # Arguments must be changed as follows:
@@ -274,14 +267,27 @@ class CToCython(object):
 
         self.translator = expr + prs.StringEnd()
 
+
+    zero_re = re.compile(r'^[()0.,\s]+$') # variations of zero...
+    literal_re = re.compile(r'^-?[()0-9.,\s]+$') # close enough; also matches e.g. (0, 0.)
+    complex_literal_re = re.compile(r'^\s*\((-?[0-9.,\s]+),(-?[0-9.,\s]+)\)\s*$')
+
     def translate(self, s):
         self.encountered = set()
-        try:
-            r = self.translator.parseString(s)[0]
-        except prs.ParseException, e:
-            raise ValueError('Could not auto-translate: %s (%s)' % (s, e))            
-        if r[0] == '(' and r[-1] == ')':
-            r = r[1:-1]
+        m = self.complex_literal_re.match(s)
+        if m is not None:
+            real, imag = m.group(1), m.group(2)
+            if self.zero_re.match(imag):
+                r = real
+            else:
+                r = '%s + %s*1j' % (real, imag)
+        else:
+            try:
+                r = self.translator.parseString(s)[0]
+            except prs.ParseException, e:
+                raise ValueError('Could not auto-translate: %s (%s)' % (s, e))            
+            if r[0] == '(' and r[-1] == ')':
+                r = r[1:-1]
         return CythonExpression(r, self.encountered)
 
     def warn_translate(self, s, func_name):
