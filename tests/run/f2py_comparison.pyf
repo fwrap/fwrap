@@ -1,0 +1,12 @@
+python module f2py_comparison_f2py
+    interface
+
+      subroutine func(n, m, x)
+      integer, dimension(n, m), intent(in,out,overwrite) :: x
+      integer optional,check(shape(x,0)==n),depend(x) :: n=shape(x,0)
+      integer optional,check(shape(x,1)==m),depend(x) :: m=shape(x,1)
+      end subroutine
+
+    end interface 
+end python module f2py_comparison_f2py
+
