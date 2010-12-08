@@ -576,10 +576,7 @@ class _CyArrayArg(_CyArgBase):
         return [('object %s' % self.cy_name, default)]
 
     def intern_declarations(self, ctx, extern_decl_made):
-        decls = ["cdef np.ndarray[%s, ndim=%d, mode='fortran'] %s" %
-                (self.ktp,
-                 self.ndims,
-                 self.intern_name,)]
+        decls = ["cdef np.ndarray %s" % self.intern_name]
         if ctx.cfg.f77binding or self.mem_offset_code is not None:
             decls.append("cdef fw_shape_t %s[%d]" %
                          (self.shape_var_name,
