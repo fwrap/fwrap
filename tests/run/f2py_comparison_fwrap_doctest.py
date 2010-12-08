@@ -91,4 +91,12 @@ Require flattening of dimension; (2,2,2) treated as (2,2,4)::
     True
     >>> raises_error(func, b, 4, 2)
     True
+
+Out arrays::
+
+    >>> out_arr(2, 3)
+    array([[1, 2, 3],
+           [4, 5, 6]], dtype=int32)
+
 """
+

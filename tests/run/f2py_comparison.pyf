@@ -7,6 +7,12 @@ python module f2py_comparison_f2py
       integer optional,check(shape(x,1)==m),depend(x) :: m=shape(x,1)
       end subroutine
 
+      subroutine out_arr(n, m, xout)
+      integer, dimension(n, m), intent(out) :: xout
+      integer intent(in) :: n
+      integer intent(in) :: m
+      end subroutine
+
     end interface 
 end python module f2py_comparison_f2py
 
