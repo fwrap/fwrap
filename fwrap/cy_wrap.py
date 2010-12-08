@@ -317,7 +317,8 @@ class _CyArg(_CyArgBase):
         assert self.intent in ('out', 'inout', None)
         return [self.intern_name]
 
-    docstring_return_tuple_list = return_tuple_list
+    def docstring_return_tuple_list(self):
+        return _CyArg.return_tuple_list(self, ctx=None)
 
     def _gen_dstring(self):
         dstring = ("%s : %s" %
