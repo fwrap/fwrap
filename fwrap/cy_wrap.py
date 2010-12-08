@@ -312,7 +312,7 @@ class _CyArg(_CyArgBase):
                    ex=execute_expr, doc=doc_expr)
             yield cs
 
-    def return_tuple_list(self):
+    def return_tuple_list(self, ctx):
         assert self.cy_name != constants.ERR_NAME
         assert self.intent in ('out', 'inout', None)
         return [self.intern_name]
@@ -361,7 +361,7 @@ class _CySingleCharArg(_CyArg):
     def call_arg_list(self, ctx):
         return ["%s" % self.buf_name]
 
-    def return_tuple_list(self):
+    def return_tuple_list(self, ctx):
         return [self.buf_name]
 
 class _CyStringArg(_CyArg):
@@ -443,7 +443,7 @@ class _CyStringArg(_CyArg):
         else:
             return ['&%s' % self.intern_len_name, self.intern_buf_name]
 
-    def return_tuple_list(self):
+    def return_tuple_list(self, ctx):
         if self.intent in ('out', 'inout', None):
             return [self.intern_name]
         return []
@@ -479,7 +479,7 @@ class _CyErrStrArg(_CyArgBase):
     def call_arg_list(self, ctx):
         return [self.cy_name]
 
-    def return_tuple_list(self):
+    def return_tuple_list(self, ctx):
         return []
 
     def pre_call_code(self, ctx):
@@ -648,15 +648,19 @@ class _CyArrayArg(_CyArgBase):
             d['copy'] = 'False'
 
         # Generate call to convert or allocate array
-        ctx.use_utility_code(as_fortran_array_utility_code) # needed in both cases
+        if ctx.cfg.should_emulate_f2py():
+            ctx.use_utility_code(as_fortran_array_f2pystyle_utility_code)
+        else:
+            ctx.use_utility_code(as_fortran_array_utility_code)
         cs = CodeSnippet(('init', self.intern_name),
                          [('init', r) for r in requires])
+
         if can_allocate:
             ctx.use_utility_code(explicit_shape_array_utility_code)
-            cs.putln('%(intern)s = fw_explicitshapearray(%(extern)s, %(dtenum)s, '
+            cs.putln('%(intern)s, %(extern)s = fw_explicitshapearray(%(extern)s, %(dtenum)s, '
                      '%(ndim)d, [%(shape)s], %(copy)s)' % d)
         else:
-            cs.putln('%(intern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '
+            cs.putln('%(intern)s, %(extern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '
                      '%(ndim)d, %(copy)s)' % d)
 
         # May need to copy shape into new array as well
@@ -675,9 +679,11 @@ class _CyArrayArg(_CyArgBase):
     def post_call_code(self, ctx):
         return []
 
-    def return_tuple_list(self):
+    def return_tuple_list(self, ctx):
         if self.intent in ('out', 'inout', None):
-            return [self.intern_name]
+            # fw_asfortranarray returns tuple with internal and external view,
+            # and we return the external one
+            return [self.cy_name]
         return []
 
     def _gen_dstring(self):
@@ -792,10 +798,10 @@ class CyArgManager(object):
             decls.extend(arg.intern_declarations(ctx, arg in self.in_args))
         return decls
 
-    def return_tuple_list(self):
+    def return_tuple_list(self, ctx):
         rtl = []
         for arg in self.out_args:
-            rtl.extend(arg.return_tuple_list())
+            rtl.extend(arg.return_tuple_list(ctx))
         return rtl
 
     def pre_call_code(self, ctx):
@@ -890,9 +896,9 @@ class CyProcedure(AstNode):
         for line in decls:
             buf.putln(line)
 
-    def return_tuple(self):
+    def return_tuple(self, ctx):
         ret_arg_list = []
-        ret_arg_list.extend(self.arg_mgr.return_tuple_list())
+        ret_arg_list.extend(self.arg_mgr.return_tuple_list(ctx))
         if len(ret_arg_list) > 1:
             return "return (%s,)" % ", ".join(ret_arg_list)
         elif len(ret_arg_list) == 1:
@@ -969,7 +975,7 @@ class CyProcedure(AstNode):
         self.pre_call_code(ctx, buf)
         buf.putln(self.proc_call(ctx))
         self.post_try_finally(ctx, buf)
-        rt = self.return_tuple()
+        rt = self.return_tuple(ctx)
         if rt: buf.putln(rt)
         buf.dedent()
 
@@ -1082,7 +1088,8 @@ explicit_shape_array_utility_code = u"""
 cdef object fw_explicitshapearray(object value, int typenum, int ndim,
                                   np.intp_t *shape, bint copy):
     if value is None:
-        return np.PyArray_ZEROS(ndim, shape, typenum, 1)
+        result = np.PyArray_ZEROS(ndim, shape, typenum, 1)
+        return result, result
     else:
         return fw_asfortranarray(value, typenum, ndim, copy)
 """
@@ -1095,8 +1102,94 @@ cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy):
         flags |= np.NPY_C_CONTIGUOUS
     if copy:
         flags |= np.NPY_ENSURECOPY
-    return np.PyArray_FROMANY(value, typenum, ndim, ndim, flags)
+    result = np.PyArray_FROMANY(value, typenum, ndim, ndim, flags)
+    return result, result
 """
+
+as_fortran_array_f2pystyle_utility_code = u"""
+cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy):
+    cdef int flags = np.NPY_F_CONTIGUOUS
+    if ndim <= 1:
+        # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
+        flags |= np.NPY_C_CONTIGUOUS
+    if copy:
+        flags |= np.NPY_ENSURECOPY
+    result = np.PyArray_FROMANY(value, typenum, 0, 0, flags)
+
+
+    if ndim == result.ndim:
+        return result, result
+    else:
+        to_shape = [None] * ndim
+        fw_f2py_shape_coercion(ndim, to_shape, result.ndim, result.shape,
+                               result.size)
+        return result.reshape(to_shape, order='F'), result
+
+cdef object fw_f2py_shape_coercion(int to_ndim, object to_shape,
+                                   int from_ndim, object from_shape,
+                                   Py_ssize_t from_size):
+    # Logic ported from check_and_fix_dimensions in fortranobject.c
+    # Todo: optimize
+    if to_ndim > from_ndim:
+        to_size = 1
+        free_ax = -1
+        for i in range(from_ndim):
+            d = from_shape[i]
+            if d == 0:
+                d = 1
+            to_shape[i] = d
+            to_size *= d
+        for i in range(from_ndim, to_ndim):
+            if free_ax < 0:
+                free_ax = i
+            else:
+                to_shape[i] = 1
+        if free_ax >= 0:
+            to_shape[free_ax] = from_size // to_size
+    elif to_ndim < from_ndim:
+        j = 0
+        for i in range(from_ndim):
+            while j < from_ndim and from_shape[j] < 2:
+                j += 1
+            if j >= from_ndim:
+                d = 1
+            else:
+                d = from_shape[j]
+                j += 1
+            if i < to_ndim:
+                to_shape[i] = d
+            else:
+                to_shape[to_ndim - 1] *= d    
+"""
+
+    
+
+    
+##     if result.ndim != ndim:
+##         # TODO: Optimize
+
+##         # Emulate f2py array handling.
+##         # First, ignore any 1-length dimension
+##         new_shape = [x for x in result.shape if x > 1]
+##         if len(new_shape) > ndim:
+##             # Flatten extra trailing dimensions
+##             lastdim = 1
+##             for d in new_shape[ndim - 1:]:
+##                 lastdim *= d
+##             new_shape = new_shape[:ndim - 1] + [lastdim]
+##         else:
+##             # Append 1-length dimensions
+##             new_shape += [1 if (result.size > 0) else 0] * (ndim - len(new_shape))
+## #        import sys
+## #        sys.stderr.write(str(new_shape))
+## #        sys.stderr.write(str(result.ndim))
+## #        sys.stderr.write('\\n')
+##         #sys.stderr.write(repr(result.reshape(new_shape).flags))
+## #        a, b = result.reshape(new_shape, order='F'), result
+## #        sys.stderr.write('%s %s <---\\n' % (a.strides, b.strides))
+
+#        return a, b
+#    return result, result
 
 as_char_utility_code = u"""
 cdef char fw_aschar(object s):

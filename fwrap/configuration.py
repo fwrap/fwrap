@@ -46,6 +46,7 @@ configuration_dom = {
     'exclude' : (LIST_ITEM, r'^[a-zA-Z0-9_]+$', None, {}),
     'template' : (LIST_ITEM, r'^[a-zA-Z0-9_,]+$', None, {}),
     'f77binding' : (ATTR, parse_bool, False, {}),
+    'emulate-f2py' : (ATTR, parse_bool, False, {}),
     'detect-templates' : (ATTR, parse_bool, False, {}),
     'auxiliary' : (LIST_ITEM, r'^.+$', None, {}),
     }
@@ -65,6 +66,8 @@ def add_cmdline_options(add_option):
                default=[],
                help='comma-seperated list of routines that makes up a template '
                '(in addition to the auto-detected ones)')
+    add_option('--emulate-f2py', action='store_true',
+               help='go to greater lengths to behave like f2py')
     add_option('--dummy', action='store_true',
                help='dummy development configuration option')
     
@@ -73,7 +76,8 @@ def _document_from_cmdline_options(options):
     return {
         'f77binding' : options.f77binding,
         'detect-templates' : options.detect_templates,
-        'template' : [(x, {}) for x in options.template]
+        'template' : [(x, {}) for x in options.template],
+        'emulate-f2py' : options.emulate_f2py
          }
 
 #
@@ -83,7 +87,7 @@ def _document_from_cmdline_options(options):
 class Configuration:
     # In preferred order when serializing:
     keys = ['version', 'vcs', 'wraps', 'exclude', 'f77binding', 'detect-templates',
-            'template', 'auxiliary']
+            'template', 'emulate-f2py', 'auxiliary']
 
     @staticmethod
     def create_from_file(filename):
@@ -222,6 +226,9 @@ class Configuration:
 
     def get_templates(self):
         return [x.split(',') for x, attr in self.template]
+
+    def should_emulate_f2py(self):
+        return self.emulate_f2py
 
 
 #
