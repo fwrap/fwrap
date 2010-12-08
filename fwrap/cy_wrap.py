@@ -651,6 +651,7 @@ class _CyArrayArg(_CyArgBase):
             d['copy'] = 'False'
 
         # Generate call to convert or allocate array
+        ctx.use_utility_code(as_fortran_array_utility_code) # needed in both cases
         cs = CodeSnippet(('init', self.intern_name),
                          [('init', r) for r in requires])
         if can_allocate:
@@ -658,7 +659,6 @@ class _CyArrayArg(_CyArgBase):
             cs.putln('%(intern)s = fw_explicitshapearray(%(extern)s, %(dtenum)s, '
                      '%(ndim)d, [%(shape)s], %(copy)s)' % d)
         else:
-            ctx.use_utility_code(as_fortran_array_utility_code) 
             cs.putln('%(intern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '
                      '%(ndim)d, %(copy)s)' % d)
 
