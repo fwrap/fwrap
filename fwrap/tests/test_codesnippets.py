@@ -85,6 +85,21 @@ def test_basic():
         Put on space suit (requires sweater)
         '''))
 
+def test_infloop():
+    # With a leaf node
+    nodes, node = graph_closure()
+    node('a', ['b'])
+    node('b', ['c'])
+    node('c', ['a'])
+    node('d', ['a'])
+    assert_raises(DependencyException, topological_sort, nodes)
+
+    # Without leaf nodes into cycle
+    nodes, node = graph_closure()
+    node('a', ['b'])
+    node('b', ['c'])
+    node('c', ['a'])
+    assert_raises(DependencyException, topological_sort, nodes)
     
     
 def test_errors():
