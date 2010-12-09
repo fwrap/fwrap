@@ -171,7 +171,12 @@ def generate_cy_pxd(cy_ast, name):
 def generate_cy_pyx(cy_ast, name, cfg):
     buf = CodeBuffer()
     cy_wrap.generate_cy_pyx(cy_ast, name, buf, cfg)
-    return buf
+    # Add sha1 to file
+    s = buf.getvalue()
+    sha1 = configuration.get_self_sha1(s)
+    s = configuration.update_self_sha1(s, sha1)
+    cfg.self_sha1 = sha1
+    return s
 
 def generate_fc_pxd(fc_ast, name):
     buf = CodeBuffer()

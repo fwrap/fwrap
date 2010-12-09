@@ -52,34 +52,29 @@ def get_head_record_update_commit(rev):
 def commit_wrapper(cfg, message, skip_head_commit=False):
     pyx_basename = cfg.get_pyx_basename()
     auxiliary_basenames = cfg.get_auxiliary_files()
-    recorded_rev = cfg.git_head()
     message = 'FWRAP %s' % message
-    git.add([pyx_basename] + auxiliary_basenames)
-    git.commit(message)
-    # That's it for content. However, we need to update the head
-    # pointer to point to the commit just made. Simply search/replace
-    # the file to make the change and commit again
-    if not skip_head_commit:
-        new_rev = git.cwd_rev()
-        configuration.replace_in_file('head %s' % recorded_rev,
-                                      'head %s' % new_rev,
-                                      pyx_basename,
-                                      expected_count=1)
-        git.add([pyx_basename])
-        git.commit('FWRAP Head record update in %s' % pyx_basename)
-    head = git.cwd_rev()
-    return head        
+    to_add = [pyx_basename] + auxiliary_basenames
+    git.add(to_add)
+    if len(git.status(to_add)) == 0:
+        return # no changes to commit
+    else:
+        git.commit(message)
 
 def create_cmd(opts):
-    if os.path.exists(opts.wrapper_pyx) and not opts.force:
-        raise ValueError('File exists: %s' % opts.wrapper_pyx)
-    check_in_directory_of(opts.wrapper_pyx)
+    try:
+        is_vcs_clean = git.clean_index_and_workdir()
+    except RuntimeError:
+        use_git = False
+        if os.path.exists(opts.wrapper_pyx) and not opts.force:
+            raise ValueError('File exists (try -f switch): %s' % opts.wrapper_pyx)
+    else:
+        use_git = not opts.nocommit
+        if not is_vcs_clean and not (opts.force and opts.nocommit):
+            raise RuntimeError('git state not clean (use "-f --nocommit" to create wrapper anyway)')
+            
+    check_in_directory_of(opts.wrapper_pyx)    
     cfg = Configuration(opts.wrapper_pyx, cmdline_options=opts)
     cfg.update_version()
-    cfg.set_versioned_mode(opts.versioned)
-    # Ensure that tree is clean, as we want to auto-commit
-    if opts.versioned and not git.clean_index_and_workdir():
-        raise RuntimeError('VCS state not clean, aborting')
     # Add wrapped files to configurtion
     for filename in opts.fortranfiles:
         cfg.add_wrapped_file(filename)
@@ -90,13 +85,12 @@ def create_cmd(opts):
         cfg.wrapper_name,
         cfg)
     # Commit
-    if opts.versioned:
+    if use_git:
         message = opts.message
         if message is None:
-            message = 'Created wrapper %s' % os.path.basename(opts.wrapper_pyx)
+            message = '(do not squash) Created wrapper %s' % os.path.basename(opts.wrapper_pyx)
         message = ('%s\n\nFiles wrapped:\n%s' %
                    (message, '\n'.join(opts.fortranfiles)))
-        
         commit_wrapper(cfg, message)
     return 0
 
@@ -300,9 +294,8 @@ def create_argument_parser():
     create.set_defaults(func=create_cmd)
     create.add_argument('-f', '--force', action='store_true',
                         help=('overwrite existing wrapper'))    
-    create.add_argument('--versioned', action='store_true',
-                        help=('allow modification of generated wrappers, and employ '
-                              'VCS to manage changes (only git supported currently)'))    
+    create.add_argument('--nocommit', action='store_true',
+                        help=('do not commit resulting wrapper to git'))    
     create.add_argument('-m', '--message',
                         help=('commit log message'))
     configuration.add_cmdline_options(create.add_argument)
