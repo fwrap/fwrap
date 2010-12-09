@@ -957,13 +957,13 @@ class CyProcedure(AstNode):
         fc_name_to_intern_name = dict((arg.name, arg.intern_name) for arg in args)
         fc_name_to_cy_name = dict((arg.name, arg.cy_name) for arg in args)
         
-        visited_args = set() # TODO: This is now by id, unfortunately
+        visited_args = [] # TODO: Immutable nodes would make us able to make set
         snippets = []
         # Fetch all code snippets
         for arg in args:
-            if id(arg) in visited_args:
+            if arg in visited_args:
                 continue
-            visited_args.add(id(arg))
+            visited_args.append(arg)
             snippets.extend(arg.get_code_snippets(ctx, fc_name_to_intern_name,
                                                   fc_name_to_cy_name))
         # Now sort snippets by phase (for stylistic reasons -- all
