@@ -241,6 +241,27 @@ def mergepyf_cmd(opts):
     
     return 0
 
+typemap_in = 'fwrap_type_specs.in'
+typemap_f90 = 'fwrap_ktp_mod.f90'
+typemap_h = 'fwrap_ktp_header.h'
+typemap_pxd = 'fwrap_ktp.pxd'
+typemap_pxi = 'fwrap_ktp.pxi'
+def genktp_cmd(opts):
+    if not opts.f77binding:
+        raise NotImplementedError()
+
+    from fwrap.f77_config import get_f77_ctps
+    from fwrap import gen_config as gc
+
+    ctps = get_f77_ctps()
+
+    for func, filename, args in [
+        (gc.write_header, typemap_h, ()),
+        (gc.write_pxd, typemap_pxd, (typemap_h,)),
+        (gc.write_pxi, typemap_pxi, ())]:
+        with file(filename, 'w') as f:
+            func(ctps, f, *args)
+
 def checkout_or_create_fwrap_branch(cfg):
     try:
         git.checkout(BRANCH)
@@ -375,6 +396,13 @@ def create_argument_parser():
     status.add_argument('-r', '--recursive', action='store_true',
                         help='Recurse subdirectories')
     status.add_argument('paths', metavar='path', nargs='*')
+
+    #
+    # genktp
+    #
+    genktp = subparsers.add_parser('genktp')
+    genktp.set_defaults(func=genktp_cmd)
+    configuration.add_cmdline_options(genktp.add_argument)
 
     return parser
     

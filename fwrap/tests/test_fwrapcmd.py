@@ -286,3 +286,7 @@ def test_withpyf():
     ok_(SIG_WITH_PYF in load('test.pyx'))
     ok_('newroutine()' in load('test.pyx'))
 
+@with_tempdir
+def test_genktp():
+    fwrap('genktp --f77binding')
+    eq_(ls(), ['fparser.log', 'fwrap_ktp.pxd', 'fwrap_ktp.pxi', 'fwrap_ktp_header.h'])
