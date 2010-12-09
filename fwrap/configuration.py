@@ -18,7 +18,7 @@ self_sha1_re = re.compile(r'^%s self-sha1 (.*)$' % CFG_LINE_HEAD, re.MULTILINE)
 #
 # Configuration of configuration options
 #
-ATTR = object() # single attribute (e.g., git-head)
+ATTR = object() # single attribute
 LIST_ITEM = object() # repeated multiple times to form list (e.g., wraps)
 NODE = object()
 
@@ -233,6 +233,10 @@ def get_self_sha1(s):
         if self_sha1_re.match(line) is None:
             h.update(line)
     return h.hexdigest()
+
+def get_self_sha1_of_pyx(filename):
+    with file(filename) as f:
+        return get_self_sha1(f.read())
 
 def update_self_sha1(s, sha=None):
     if sha is None:

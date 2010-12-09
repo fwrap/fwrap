@@ -22,6 +22,7 @@ from fwrap import fc_wrap, cy_wrap, mergepyf
 from fwrap.configuration import Configuration
 
 BRANCH_PREFIX = '_fwrap'
+BRANCH = '_fwrap'
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -56,43 +57,100 @@ def commit_wrapper(cfg, message, skip_head_commit=False):
     to_add = [pyx_basename] + auxiliary_basenames
     git.add(to_add)
     if len(git.status(to_add)) == 0:
-        return # no changes to commit
+        print 'No changes made to wrapper, no need to commit anything'
     else:
+        print 'Making git commit'
         git.commit(message)
 
-def create_cmd(opts):
+def check_ok_to_write(opts):
     try:
         is_vcs_clean = git.clean_index_and_workdir()
     except RuntimeError:
         use_git = False
         if os.path.exists(opts.wrapper_pyx) and not opts.force:
-            raise ValueError('File exists (try -f switch): %s' % opts.wrapper_pyx)
+            raise ValueError('File exists (use "create -f" to create wrapper anyway): %s' %
+                             opts.wrapper_pyx)
     else:
         use_git = not opts.nocommit
         if not is_vcs_clean and not (opts.force and opts.nocommit):
-            raise RuntimeError('git state not clean (use "-f --nocommit" to create wrapper anyway)')
-            
+            raise RuntimeError('git state not clean (use "create -f --nocommit" to create '
+                               'wrapper anyway')
+    return use_git
+
+def create_wrapper(cfg):
+    return fwrapper.wrap(
+        cfg.get_source_files(),
+        cfg.wrapper_name,
+        cfg)
+
+def create_cmd(opts):
+    use_git = check_ok_to_write(opts)
     check_in_directory_of(opts.wrapper_pyx)    
     cfg = Configuration(opts.wrapper_pyx, cmdline_options=opts)
     cfg.update_version()
     # Add wrapped files to configurtion
     for filename in opts.fortranfiles:
         cfg.add_wrapped_file(filename)
-    
-    # Create wrapper files.
-    created_files, routine_names = fwrapper.wrap(
-        configuration.expand_source_patterns(opts.fortranfiles),
-        cfg.wrapper_name,
-        cfg)
+    create_wrapper(cfg)
     # Commit
     if use_git:
         message = opts.message
         if message is None:
-            message = '(do not squash) Created wrapper %s' % os.path.basename(opts.wrapper_pyx)
+            message = '(do not squash) Created wrapper %s' % opts.wrapper_pyx
         message = ('%s\n\nFiles wrapped:\n%s' %
                    (message, '\n'.join(opts.fortranfiles)))
         commit_wrapper(cfg, message)
     return 0
+
+def update_cmd(opts):
+    use_git = check_ok_to_write(opts)
+    if not use_git:
+        raise RuntimeError('update command can only be used with git; you may as well use create')
+    cfg = Configuration.create_from_file(opts.wrapper_pyx)
+    current_checksum = configuration.get_self_sha1_of_pyx(opts.wrapper_pyx)
+
+    start_branch = git.current_branch()
+    try:
+        git.checkout(BRANCH)
+    except RuntimeError:
+        # Branch does not exist, so create it
+        blame_rev = get_last_update_rev(cfg)
+        print 'Last automatic change to %s done in revision %s' % (cfg.get_pyx_filename(),
+                                                                   blame_rev)
+        print 'Creating "%s" branch from this revision' % BRANCH
+        git.create_branch(BRANCH, blame_rev)
+        git.checkout(BRANCH)
+    else:
+        # Branch exists; check that it is up to date
+        current_checksum = configuration.get_self_sha1_of_pyx(opts.wrapper_pyx)
+        if current_checksum != cfg.self_sha1:
+            raise RuntimeError('%s branch exists, but does not match self-sha1')
+        
+    create_wrapper(cfg)
+
+    message = opts.message
+    if message is None:
+        message = '(do not squash) Updated wrapper %s' % opts.wrapper_pyx
+    commit_wrapper(cfg, message)
+
+    git.checkout(start_branch)
+    print dedent('''
+    The updated wrapper can be found in the "%(BRANCH)s" branch,
+    please pull it in manually with:
+
+        git merge _fwrap
+
+    The "%(BRANCH)s" branch can either be left until next time
+    or removed, at your option. If removed, it will be recreated
+    the next time you do "fwrap update".
+    ''' % dict(BRANCH=BRANCH))
+
+def get_last_update_rev(cfg):
+    # Find the commit that takes the blame for the self_sha1
+    regex = '%s self-sha1 %s' % (configuration.CFG_LINE_HEAD,
+                                     cfg.self_sha1)
+    blame_rev = git.blame_for_regex(cfg.get_pyx_filename(), regex)
+    return blame_rev
 
 def checkout_new_branch_from_last_fwrap(cfg):
     rev = cfg.git_head()
@@ -220,42 +278,6 @@ def mergepyf_cmd(opts):
     print_help_after_update(orig_branch, temp_branch)
     return 0
 
-def update_wrapper(cfg, skip_head_commit, message):
-    if not git.is_tracked(cfg.get_pyx_filename()):
-        raise RuntimeError('Not tracked by VCS, aborting: %s' % cfg.get_pyx_basename())
-    if not git.clean_index_and_workdir():
-        raise RuntimeError('VCS state not clean, aborting')
-
-    # First, generate wrappers (since Fortran files have changed
-    # on *this* tree). But generate them into a temporary location.
-    tmp_dir = tempfile.mkdtemp(prefix='fwrap-')
-    try:
-        fwrapper.wrap(cfg.get_source_files(),
-                      cfg.wrapper_name,
-                      cfg,
-                      output_directory=tmp_dir)
-        # Then, create and check out _fwrap branch used for merging, and
-        # copy files in
-        temp_branch = checkout_new_branch_from_last_fwrap(cfg)
-        for f in glob(os.path.join(tmp_dir, '*')):
-            shutil.copy(f, '.')
-    finally:
-        print 'tmp_dir', tmp_dir
-        #shutil.rmtree(tmp_dir)
-    # Commit
-    if message is None:
-        message = 'Updated wrapper %s' % cfg.get_pyx_basename()
-    commit_wrapper(cfg, message, skip_head_commit=skip_head_commit)
-    return temp_branch
-
-def update_cmd(opts):
-    cfg = Configuration.create_from_file(opts.wrapper_pyx)
-    cfg.git_head() # fail if not in git mode
-    check_in_directory_of(opts.wrapper_pyx)
-    orig_branch = git.current_branch()
-    temp_branch = update_wrapper(cfg, False, opts.message)
-    print_help_after_update(orig_branch, temp_branch)
-
 def print_help_after_update(orig_branch, temp_branch):
     # Print help text
     print dedent('''\
@@ -306,7 +328,7 @@ def create_argument_parser():
     # update command
     #
     update = subparsers.add_parser('update')
-    update.set_defaults(func=update_cmd)
+    update.set_defaults(func=update_cmd, nocommit=False, force=False)
     update.add_argument('-m', '--message',
                         help=('commit log message'))
     update.add_argument('wrapper_pyx')
@@ -340,6 +362,8 @@ def fwrap_main(args):
         if (not opts.wrapper_pyx.endswith('.pyx') and
             not opts.wrapper_pyx.endswith('.pyx.in')):
             raise ValueError('Cython wrapper file name must end in .pyx or .pyx.in')
+        check_in_directory_of(opts.wrapper_pyx)
+        opts.wrapper_pyx = os.path.basename(opts.wrapper_pyx)
 
     return opts.func(opts)
 

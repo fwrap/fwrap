@@ -69,6 +69,9 @@ def add(files):
 def commit(message):
     execproc(['git', 'commit', '-m', message])
 
+def create_branch(name, rev):
+    execproc(['git', 'branch', name, rev])
+
 def create_temporary_branch(start_point, prefix):
     # TODO: Ensure/make this work on localized systems
     # Should probably use lower-level tool...
@@ -96,3 +99,12 @@ def children_of_commit(rev):
 def get_commit_title(rev):
     lines = execproc(['git', 'show', '--raw', '--format=format:%s', rev]).split('\n')
     return lines[0]
+
+def blame_for_regex(filename, regex):
+    out = execproc(['git', 'blame', '--porcelain', '-l',
+                    '-L', '/%s/,+1' % regex, filename])
+    rev, origline, finalline, n = out.split('\n')[0].split()
+    return rev
+
+def merge(branch):
+    execproc(['git', 'merge', branch])
