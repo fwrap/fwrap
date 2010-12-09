@@ -209,6 +209,8 @@ class Configuration:
     def should_emulate_f2py(self):
         return self.emulate_f2py
 
+    def update_self_sha1(self, sha1):
+        self.document['self-sha1'] = sha1
 
 #
 # Utils
@@ -238,7 +240,7 @@ def get_self_sha1_of_pyx(filename):
     with file(filename) as f:
         return get_self_sha1(f.read())
 
-def update_self_sha1(s, sha=None):
+def update_self_sha1_in_string(s, sha=None):
     if sha is None:
         sha = get_self_sha1(s)
     return self_sha1_re.sub('%s self-sha1 %s' % (CFG_LINE_HEAD, sha), s)

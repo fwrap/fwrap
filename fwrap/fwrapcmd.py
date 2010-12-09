@@ -23,6 +23,7 @@ from fwrap.configuration import Configuration
 
 BRANCH_PREFIX = '_fwrap'
 BRANCH = '_fwrap'
+PYF_BRANCH = '_fwrap+pyf'
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -111,16 +112,7 @@ def update_cmd(opts):
     f_ast = fwrapper.parse(f_source_files, cfg)
 
     start_branch = git.current_branch()
-    try:
-        git.checkout(BRANCH)
-    except RuntimeError:
-        # Branch does not exist, so create it
-        blame_rev = get_last_update_rev(cfg)
-        print 'Last automatic change to %s done in revision %s' % (cfg.get_pyx_filename(),
-                                                                   blame_rev)
-        print 'Creating "%s" branch from this revision' % BRANCH
-        git.create_branch(BRANCH, blame_rev)
-        git.checkout(BRANCH)
+    checkout_or_create_fwrap_branch(cfg)
 
     # Check that file in branch matches wanted checksum
     checksum_in_branch = configuration.get_self_sha1_of_pyx(opts.wrapper_pyx)
@@ -140,16 +132,14 @@ def update_cmd(opts):
     git.checkout(start_branch)
     print dedent('''
     The updated wrapper can be found in the "%(BRANCH)s" branch,
-    please pull it in manually with:
+    please merge it in manually with:
 
         git merge %(BRANCH)s
 
-    The "%(BRANCH)s" branch can either be left until next time
+    The "%(BRANCH)s" branch can either be left until next time,
     or removed, at your option. If removed, it will be recreated
     the next time you do "fwrap update".
     ''' % dict(BRANCH=BRANCH))
-
-
 
 def mergepyf_cmd(opts):
     use_git = check_ok_to_write(opts)
@@ -167,6 +157,13 @@ def mergepyf_cmd(opts):
         raise RuntimeError('Not tracked by VCS, aborting: %s' % cfg.get_pyx_basename())
     if not git.clean_index_and_workdir():
         raise RuntimeError('VCS state not clean, aborting')
+    try:
+        git.checkout(PYF_BRANCH)
+    except RuntimeError:
+        pass
+    else:
+        git.checkout(start_branch)
+        raise RuntimeError('Branch "%s" already exists, aborting' % PYF_BRANCH)
 
     # pyf-merging is based on primarily wrapping the Fortran files,
     # but incorporate any changes in pyf files (see mergepyf.py).
@@ -184,7 +181,7 @@ def mergepyf_cmd(opts):
     routines_in_pyf = [routine.name for routine in pyf_f_ast]
     excluded_by_pyf = set(routines_in_fortran) - set(routines_in_pyf)
     cfg.exclude_routines(excluded_by_pyf)
-    
+
     f_ast = fwrapper.filter_ast(f_ast, cfg) # remove excluded routines from ast
 
     # Continue pipeline for both Fortran and pyf
@@ -198,29 +195,63 @@ def mergepyf_cmd(opts):
     merged_cython_ast = mergepyf.mergepyf_ast(cython_ast, pyf_cython_ast)
 
     # Loaded what we need of HEAD to memory, time to branch
-    orig_branch = git.current_branch()
-    temp_branch = checkout_new_branch_from_last_fwrap(cfg)
+    checkout_or_create_fwrap_branch(cfg)
     
     # If we are removing any routines, generate a seperate changeset for that,
-    # based on Fortran sources (with changed configuration/exclusion) only
+    # based on Fortran sources (with changed configuration/exclusion) only.
+    # This provides a better commit for later merges.
     if len(excluded_by_pyf) > 0:
         fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
-                          c_ast=c_ast, cython_ast=cython_ast)
+                          c_ast=c_ast, cython_ast=cython_ast,
+                          update_self_sha=True)
         commit_wrapper(cfg,
-                       message='Removing routines not present in %s' % opts.pyf,
-                       skip_head_commit=True)
+                       message='(do not squash) Removed routines not present in %s' % opts.pyf)
+
+    # Then, branch again from _fwrap to _fwrap+pyf. We do NOT
+    # update the self-sha1 on this branch, so that the changes
+    # are considered manual when doing a "fwrap update"
+    git.branch(PYF_BRANCH, 'HEAD')
+    git.checkout(PYF_BRANCH)
+    
     # Now, we generate the wrapper using the merged cython AST
     # (This regenerates the _fc-files if the if-test above hits;
     # TODO: break this up some, but overhead is negligible)
     fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
-                      c_ast=c_ast, cython_ast=merged_cython_ast)
+                      c_ast=c_ast, cython_ast=merged_cython_ast,
+                      update_self_sha=False)
     message = opts.message
     if message is None:
-        message = 'Creating wrapper based on pyf file: %s' % opts.pyf
+        message = 'Ported changes of %s' % opts.pyf
     commit_wrapper(cfg, message)
-    print_help_after_update(orig_branch, temp_branch)
+
+    git.checkout(start_branch)
+
+    print dedent('''
+    The updated wrapper can be found in the "%(PYF_BRANCH)s" branch,
+    please merge it manually and remove it with:
+
+        git merge %(PYF_BRANCH)s
+        git branch -d %(PYF_BRANCH)s
+
+    Later "fwrap update" commands will be based off "%(BRANCH)s",
+    which can either be left around, or removed, at your option.  If
+    removed, it will be recreated the next time you do "fwrap update",
+    without the changes of the pyf file.
+    ''' % dict(PYF_BRANCH=PYF_BRANCH, BRANCH=BRANCH))
+    
     return 0
 
+def checkout_or_create_fwrap_branch(cfg):
+    try:
+        git.checkout(BRANCH)
+    except RuntimeError:
+        # Branch does not exist, so create it
+        blame_rev = get_last_update_rev(cfg)
+        print 'Last automatic change to %s done in revision %s' % (cfg.get_pyx_filename(),
+                                                                   blame_rev)
+        print 'Creating "%s" branch from this revision' % BRANCH
+        git.branch(BRANCH, blame_rev)
+        git.checkout(BRANCH)
 
 def get_last_update_rev(cfg):
     # Find the commit that takes the blame for the self_sha1
@@ -228,13 +259,6 @@ def get_last_update_rev(cfg):
                                      cfg.self_sha1)
     blame_rev = git.blame_for_regex(cfg.get_pyx_filename(), regex)
     return blame_rev
-
-def checkout_new_branch_from_last_fwrap(cfg):
-    rev = cfg.git_head()
-    rev = get_head_record_update_commit(rev)
-    temp_branch = git.create_temporary_branch(rev, BRANCH_PREFIX)
-    git.checkout(temp_branch)
-    return temp_branch
 
 def print_file_status(filename):
     file_cfg = Configuration.create_from_file(filename)
@@ -336,7 +360,7 @@ def create_argument_parser():
     # mergepyf command
     #
     mergepyf = subparsers.add_parser('mergepyf')
-    mergepyf.set_defaults(func=mergepyf_cmd)
+    mergepyf.set_defaults(func=mergepyf_cmd, nocommit=False, force=False)
     mergepyf.add_argument('wrapper_pyx')
     mergepyf.add_argument('-m', '--message',
                           help=('commit log message'))

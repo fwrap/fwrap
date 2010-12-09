@@ -71,7 +71,7 @@ def commit(message, to_add=None):
         add(to_add)
     execproc(['git', 'commit', '-m', message])
 
-def create_branch(name, rev):
+def branch(name, rev):
     execproc(['git', 'branch', name, rev])
 
 def create_temporary_branch(start_point, prefix):

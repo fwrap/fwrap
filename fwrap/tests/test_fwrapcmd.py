@@ -16,6 +16,11 @@ from fwrap.git import checkout, merge
 
 temprepo = None
 reporev = None
+_keeprepo = False
+
+def keeprepo():
+    global _keeprepo
+    _keeprepo = True
 
 def ne_(a, b):
     assert a != b, "%r == %r (expected !=)" % (a, b)
@@ -73,6 +78,9 @@ def dump_f(commit=False):
            y = y * 3
            z = z * 4
            end subroutine
+
+           subroutine notwrapped()
+           end subroutine
     ''', commit=commit)
 
 def dump_pyf(commit=False):
@@ -90,13 +98,18 @@ def dump_pyf(commit=False):
     ''', commit=commit)
 
 def setup_tempdir():
-    global temprepo
+    global temprepo, _keeprepo
+    _keeprepo = False
     temprepo = tempfile.mkdtemp(prefix='fwraptests-')    
     os.chdir(temprepo)
 
 def teardown_tempdir():
-    global temprepo
-    shutil.rmtree(temprepo)    
+    global temprepo, _keeprepo
+    if not _keeprepo:
+        shutil.rmtree(temprepo)
+    else:
+        print 'Please inspect and remove %s' % temprepo
+        
 
 def setup_temprepo():
     global temprepo, reporev
@@ -228,12 +241,48 @@ def test_update():
     ok_('baz' not in load('test.pyx'))
     merge('_fwrap')
     ok_('baz' in load('test.pyx'))
+
+def get_sha():
+    return configuration.get_self_sha1(load('test.pyx'))
+
+@with_temprepo
+def test_withpyf():
+    SIG_WO_PYF = 'sfoo(fwr_real_t x, fwr_real_t y, fwr_real_t z)'
+    SIG_WITH_PYF = 'sfoo(fwr_real_t y, fwr_real_t x, fwr_real_t z=0)'
     
-## @with_temprepo
-## def test_withpyf():
-##     dump_f()
-##     dump_pyf()
-##     fwrap('create test.pyx test.f')
-##     fwrap('')
-##     eq_(ls(), ['fparser.log', 'fwrap_type_specs.in', 'test.f90', 'test.pxd',
-##                'test.pyx', 'test_fc.f90', 'test_fc.h', 'test_fc.pxd'])
+    dump_f(commit=True)
+    dump_pyf(commit=True)
+    fwrap('create --f77binding test.pyx test.f')
+    eq_(git.current_branch(), 'master')
+    ok_(SIG_WO_PYF in load('test.pyx'))
+    sha_from_create = get_sha()
+    ok_(sha_from_create in load('test.pyx'))
+    ok_('notwrapped()' in load('test.pyx'))
+
+    fwrap('mergepyf test.pyx test.pyf')
+    eq_(git.current_branch(), 'master')
+    eq_(ls(), ['fparser.log', 'test.f',
+               'test.pxd', 'test.pyf', 'test.pyx', 'test_fc.f',
+               'test_fc.h', 'test_fc.pxd'])    
+    git.merge('_fwrap+pyf')
+    ok_(SIG_WITH_PYF in load('test.pyx'))
+    ok_(get_sha() not in load('test.pyx'))
+    ok_('notwrapped()' not in load('test.pyx'))
+    ok_(sha_from_create not in load('test.pyx'))
+
+    append('test.f', '''
+    C
+           subroutine newroutine()
+           end subroutine
+    ''', commit=True)
+    fwrap('update test.pyx')
+    
+    # At this point, there will be a trivial merge, but git is
+    # not able to do it by default. Instead of messing with
+    # requiring kdiff3 to do the merge or similar, simply allow
+    # the merge to be manual and do some inspections in the manual
+    # tree.
+    git.execproc_canfail(['git', 'merge', '_fwrap'])
+    ok_(SIG_WITH_PYF in load('test.pyx'))
+    ok_('newroutine()' in load('test.pyx'))
+
