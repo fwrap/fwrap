@@ -77,12 +77,6 @@ def check_ok_to_write(opts):
                                'wrapper anyway')
     return use_git
 
-def create_wrapper(cfg):
-    return fwrapper.wrap(
-        cfg.get_source_files(),
-        cfg.wrapper_name,
-        cfg)
-
 def create_cmd(opts):
     use_git = check_ok_to_write(opts)
     check_in_directory_of(opts.wrapper_pyx)    
@@ -91,7 +85,8 @@ def create_cmd(opts):
     # Add wrapped files to configurtion
     for filename in opts.fortranfiles:
         cfg.add_wrapped_file(filename)
-    create_wrapper(cfg)
+    # Create wrapper
+    fwrapper.wrap(cfg.get_source_files(), cfg.wrapper_name, cfg)
     # Commit
     if use_git:
         message = opts.message
@@ -106,8 +101,14 @@ def update_cmd(opts):
     use_git = check_ok_to_write(opts)
     if not use_git:
         raise RuntimeError('update command can only be used with git; you may as well use create')
+    if not git.is_tracked(opts.wrapper_pyx):
+        raise RuntimeError('Not tracked by VCS: %s' % opts.wrapper_pyx)
     cfg = Configuration.create_from_file(opts.wrapper_pyx)
-    current_checksum = configuration.get_self_sha1_of_pyx(opts.wrapper_pyx)
+    wanted_checksum = cfg.self_sha1
+
+    # Load Fortran AST into memory from Fortran sources before switching branch
+    f_source_files = cfg.get_source_files()
+    f_ast = fwrapper.parse(f_source_files, cfg)
 
     start_branch = git.current_branch()
     try:
@@ -120,14 +121,17 @@ def update_cmd(opts):
         print 'Creating "%s" branch from this revision' % BRANCH
         git.create_branch(BRANCH, blame_rev)
         git.checkout(BRANCH)
-    else:
-        # Branch exists; check that it is up to date
-        current_checksum = configuration.get_self_sha1_of_pyx(opts.wrapper_pyx)
-        if current_checksum != cfg.self_sha1:
-            raise RuntimeError('%s branch exists, but does not match self-sha1')
-        
-    create_wrapper(cfg)
 
+    # Check that file in branch matches wanted checksum
+    checksum_in_branch = configuration.get_self_sha1_of_pyx(opts.wrapper_pyx)
+    if wanted_checksum != checksum_in_branch:
+        raise RuntimeError('%s in "%s" branch has wrong checksum' %
+                           (opts.wrapper_pyx, BRANCH))
+        
+    # Create wrapper form AST loaded before the branch switch
+    fwrapper.generate(f_ast, cfg.wrapper_name, cfg)
+
+    # Commit, switch branch again, and display help text
     message = opts.message
     if message is None:
         message = '(do not squash) Updated wrapper %s' % opts.wrapper_pyx
@@ -138,12 +142,85 @@ def update_cmd(opts):
     The updated wrapper can be found in the "%(BRANCH)s" branch,
     please pull it in manually with:
 
-        git merge _fwrap
+        git merge %(BRANCH)s
 
     The "%(BRANCH)s" branch can either be left until next time
     or removed, at your option. If removed, it will be recreated
     the next time you do "fwrap update".
     ''' % dict(BRANCH=BRANCH))
+
+
+
+def mergepyf_cmd(opts):
+    use_git = check_ok_to_write(opts)
+    if use_git and not git.is_tracked(opts.wrapper_pyx):
+        raise RuntimeError('Not tracked by VCS: %s' % opts.wrapper_pyx)
+    for f in [opts.wrapper_pyx, opts.pyf]:
+        if not os.path.exists(f):
+            raise ValueError('No such file: %s' % f)
+    orig_cfg = Configuration.create_from_file(opts.wrapper_pyx)
+    start_branch = git.current_branch()
+    cfg = orig_cfg.copy()
+    cfg.update_version()
+
+    if not git.is_tracked(cfg.get_pyx_filename()):
+        raise RuntimeError('Not tracked by VCS, aborting: %s' % cfg.get_pyx_basename())
+    if not git.clean_index_and_workdir():
+        raise RuntimeError('VCS state not clean, aborting')
+
+    # pyf-merging is based on primarily wrapping the Fortran files,
+    # but incorporate any changes in pyf files (see mergepyf.py).
+    
+    # Load Fortran AST from Fortran and pyf sources
+    f_source_files = cfg.get_source_files()
+    f_ast = fwrapper.parse(f_source_files, cfg)
+    pyf_f_ast = fwrapper.parse([opts.pyf], cfg)
+
+    # Find routine names present in Fortran files that are not
+    # present in pyf file, and set them as manually excluded.
+    # Below we commit removal of this functions as a seperate commit,
+    # to keep the history much cleaner.
+    routines_in_fortran = [routine.name for routine in f_ast]
+    routines_in_pyf = [routine.name for routine in pyf_f_ast]
+    excluded_by_pyf = set(routines_in_fortran) - set(routines_in_pyf)
+    cfg.exclude_routines(excluded_by_pyf)
+    
+    f_ast = fwrapper.filter_ast(f_ast, cfg) # remove excluded routines from ast
+
+    # Continue pipeline for both Fortran and pyf
+    c_ast = fc_wrap.wrap_pyf_iface(f_ast)
+    cython_ast = cy_wrap.wrap_fc(c_ast)
+    
+    pyf_c_ast = fc_wrap.wrap_pyf_iface(pyf_f_ast)
+    pyf_cython_ast = cy_wrap.wrap_fc(pyf_c_ast)
+
+    # Do the merge of Cython ast
+    merged_cython_ast = mergepyf.mergepyf_ast(cython_ast, pyf_cython_ast)
+
+    # Loaded what we need of HEAD to memory, time to branch
+    orig_branch = git.current_branch()
+    temp_branch = checkout_new_branch_from_last_fwrap(cfg)
+    
+    # If we are removing any routines, generate a seperate changeset for that,
+    # based on Fortran sources (with changed configuration/exclusion) only
+    if len(excluded_by_pyf) > 0:
+        fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
+                          c_ast=c_ast, cython_ast=cython_ast)
+        commit_wrapper(cfg,
+                       message='Removing routines not present in %s' % opts.pyf,
+                       skip_head_commit=True)
+    # Now, we generate the wrapper using the merged cython AST
+    # (This regenerates the _fc-files if the if-test above hits;
+    # TODO: break this up some, but overhead is negligible)
+    fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
+                      c_ast=c_ast, cython_ast=merged_cython_ast)
+    message = opts.message
+    if message is None:
+        message = 'Creating wrapper based on pyf file: %s' % opts.pyf
+    commit_wrapper(cfg, message)
+    print_help_after_update(orig_branch, temp_branch)
+    return 0
+
 
 def get_last_update_rev(cfg):
     # Find the commit that takes the blame for the self_sha1
@@ -200,84 +277,6 @@ def status_cmd(opts):
             if os.path.isfile(filename) and filename.endswith('.pyx'):
                 needs_update = needs_update or print_file_status(filename)
     return 1 if needs_update else 0
-
-
-def mergepyf_cmd(opts):
-    check_in_directory_of(opts.wrapper_pyx)
-    for f in [opts.wrapper_pyx, opts.pyf]:
-        if not os.path.exists(f):
-            raise ValueError('No such file: %s' % f)
-    orig_cfg = Configuration.create_from_file(opts.wrapper_pyx)
-    orig_branch = git.current_branch()
-    cfg = orig_cfg.copy()
-    cfg.update_version()
-
-    if not git.is_tracked(cfg.get_pyx_filename()):
-        raise RuntimeError('Not tracked by VCS, aborting: %s' % cfg.get_pyx_basename())
-    if not git.clean_index_and_workdir():
-        raise RuntimeError('VCS state not clean, aborting')
-
-    # pyf-merging is based on primarily wrapping the Fortran files,
-    # but incorporate any .
-    #  - We set any procs not present in pyf file as manually excluded
-    #  - We reorder the arguments in the Cython wrappers as
-    #    expressed by the pyf file, *without* changing how we call
-    #    the Fortran code (this is achieved by a manual callstatement
-    #    in f2py)
-    # Loading ASTs into memory here instead of in fwrapper has
-    # the convenient side-effect that we can freely switch git
-    # branch without creating temporary directories
-    
-    # Load Fortran AST from Fortran and pyf sources
-    f_source_files = cfg.get_source_files()
-    f_ast = fwrapper.parse(f_source_files, cfg)
-    pyf_f_ast = fwrapper.parse([opts.pyf], cfg)
-
-    # Find routine names present in Fortran files that are not
-    # present in pyf file, and set them as manually excluded.
-    # Below we commit removal of this functions as a seperate commit,
-    # to keep the history much cleaner.
-    routines_in_fortran = [routine.name for routine in f_ast]
-    routines_in_pyf = [routine.name for routine in pyf_f_ast]
-    excluded_by_pyf = set(routines_in_fortran) - set(routines_in_pyf)
-    cfg.exclude_routines(excluded_by_pyf)
-    
-    f_ast = fwrapper.filter_ast(f_ast, cfg) # remove excluded routines from ast
-
-    # Continue pipeline for both Fortran and pyf
-    c_ast = fc_wrap.wrap_pyf_iface(f_ast)
-    cython_ast = cy_wrap.wrap_fc(c_ast)
-    
-    pyf_c_ast = fc_wrap.wrap_pyf_iface(pyf_f_ast)
-    pyf_cython_ast = cy_wrap.wrap_fc(pyf_c_ast)
-
-    # Do the merge of Cython ast
-    merged_cython_ast = mergepyf.mergepyf_ast(cython_ast, pyf_cython_ast)
-
-    # Loaded what we need of HEAD to memory, time to branch
-    orig_branch = git.current_branch()
-    temp_branch = checkout_new_branch_from_last_fwrap(cfg)
-    
-    # If we are removing any routines, generate a seperate changeset for that,
-    # based on Fortran sources (with changed configuration/exclusion) only
-    if len(excluded_by_pyf) > 0:
-        fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
-                          c_ast=c_ast, cython_ast=cython_ast)
-        commit_wrapper(cfg,
-                       message='Removing routines not present in %s' % opts.pyf,
-                       skip_head_commit=True)
-    # Now, we generate the wrapper using the merged cython AST
-    # (This regenerates the _fc-files if the if-test above hits;
-    # TODO: break this up some, but overhead is negligible)
-    fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
-                      c_ast=c_ast, cython_ast=merged_cython_ast)
-    message = opts.message
-    if message is None:
-        message = 'Creating wrapper based on pyf file: %s' % opts.pyf
-    commit_wrapper(cfg, message)
-    print_help_after_update(orig_branch, temp_branch)
-    return 0
-
 def print_help_after_update(orig_branch, temp_branch):
     # Print help text
     print dedent('''\
@@ -340,7 +339,7 @@ def create_argument_parser():
     mergepyf.set_defaults(func=mergepyf_cmd)
     mergepyf.add_argument('wrapper_pyx')
     mergepyf.add_argument('-m', '--message',
-                        help=('commit log message'))
+                          help=('commit log message'))
     mergepyf.add_argument('pyf')
 
     #

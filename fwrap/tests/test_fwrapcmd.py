@@ -12,6 +12,7 @@ from nose.tools import ok_, eq_, set_trace, assert_raises, with_setup
 
 from fwrap import git
 from fwrap import configuration
+from fwrap.git import checkout, merge
 
 temprepo = None
 reporev = None
@@ -19,13 +20,15 @@ reporev = None
 def ne_(a, b):
     assert a != b, "%r == %r (expected !=)" % (a, b)
 
-def dump(filename, contents):
-    with file(filename, 'w') as f:
+def dump(filename, contents, commit=False, mode='w'):
+    with file(filename, mode) as f:
         f.write(dedent(contents))
+    if commit:
+        git.add([filename])
+        git.commit('Changed %s' % filename)
 
-def append(filename, contents):
-    with file(filename, 'a') as f:
-        f.write(dedent(contents))
+def append(filename, contents, commit=False):
+    dump(filename, contents, commit, 'a')
 
 def load(filename):
     with file(filename) as f:
@@ -45,7 +48,7 @@ def fwrap(args, fail=False):
         result, err = git.execproc(args, get_err=True)
     return result + '\n' + err
 
-def dump_f90(name='foo'):
+def dump_f90(name='foo', commit=False):
     dump('test.f90', '''
     subroutine s%(name)s(x)
     implicit none
@@ -58,7 +61,33 @@ def dump_f90(name='foo'):
     real, intent(in) :: x
     x = x * 2
     end subroutine
-    ''' % dict(name=name))
+    ''' % dict(name=name), commit=commit)
+    
+def dump_f(commit=False):
+    dump('test.f', '''
+    C
+           subroutine sfoo(x, y, z)
+           implicit none
+           real x, y, z
+           x = x * 2
+           y = y * 3
+           z = z * 4
+           end subroutine
+    ''', commit=commit)
+
+def dump_pyf(commit=False):
+    # Reorder x and y arguments and provide default value for z
+    dump('test.pyf', '''
+    python module test
+        interface
+            subroutine sfoo(y, x, z)
+            callstatement (*f2py_func)(&x, &y, &z)
+            real, intent(in,out) :: z = 0
+            real, intent(in,out) :: x, y
+            end subroutine
+        end interface
+    end python module
+    ''', commit=commit)
 
 def setup_tempdir():
     global temprepo
@@ -139,7 +168,7 @@ def test_create_nogit():
     eq_(sha, configuration.get_self_sha1(pyx.replace(sha, 'FOO')))
 
     out = fwrap('create test.pyx test.f90', fail=True)
-    ok_('try -f switch' in out)
+    ok_('use "create -f' in out)
 
 @with_temprepo
 def test_templates():
@@ -151,36 +180,60 @@ def test_templates():
 
 @with_temprepo
 def test_update():
-    dump_f90('foo')
+    dump_f90('foo', commit=True)
     fwrap('create test.pyx test.f90')
     assert_committed()
 
     # Changeless update
     fwrap('update test.pyx')
     assert_no_commit()
-    git.merge('_fwrap')
+    merge('_fwrap')
+    ok_('foo' in load('test.pyx'))
     assert_no_commit()
 
     # Update Fortran file, no changes to pyx
-    dump_f90('bar')
+    dump_f90('bar', commit=True)
     out = fwrap('update test.pyx')
     eq_(git.current_branch(), 'master')
-    git.merge('_fwrap')
+    ok_('bar' not in load('test.pyx'))
+    merge('_fwrap')
+    ok_('bar' in load('test.pyx'))
     assert_committed()
 
     # Update pyx and Fortran file
-    append('test.pyx', 'disruptive manual change')
+    append('test.pyx', 'disruptive manual change', commit=False)
     out = fwrap('update test.pyx', fail=True)
     ok_('git state not clean' in out)
-    git.add(['test.pyx'])
-    git.commit('Manual change to test.pyx')
-    dump_f90('baz')
+    git.commit('Manual change to test.pyx', ['test.pyx'])
+    dump_f90('baz', commit=True)
+
+    # Do the update with existing _fwrap branch
+    checkout('_fwrap')
+    ok_('baz' not in load('test.f90'))
+    checkout('master')
+    ok_('baz' in load('test.f90'))
     fwrap('update test.pyx')
     eq_(git.current_branch(), 'master')
-    git.merge('_fwrap')
-    git.checkout('_fwrap')
-    dump('test.pyx', 'wipe out test.pyx')
-    git.add(['test.pyx'])
-    git.commit('Wiped out test.pyx')
-    git.checkout('master')
-    #os.system('git diff -U0 --raw HEAD^1 | grep -v @ | grep -v "+++" | grep -v -e "---"')
+    checkout('_fwrap')
+    ok_('baz' in load('test.pyx'))    
+    checkout('master')
+    ok_('baz' not in load('test.pyx'))
+
+    # Delete the _fwrap branch without merging
+    git.execproc(['git', 'branch', '-D', '_fwrap'])
+    ok_('baz' not in load('test.pyx'))
+    
+    # ...and do update again, forcing a reconstruct of _fwrap branch
+    fwrap('update test.pyx')
+    ok_('baz' not in load('test.pyx'))
+    merge('_fwrap')
+    ok_('baz' in load('test.pyx'))
+    
+## @with_temprepo
+## def test_withpyf():
+##     dump_f()
+##     dump_pyf()
+##     fwrap('create test.pyx test.f')
+##     fwrap('')
+##     eq_(ls(), ['fparser.log', 'fwrap_type_specs.in', 'test.f90', 'test.pxd',
+##                'test.pyx', 'test_fc.f90', 'test_fc.h', 'test_fc.pxd'])

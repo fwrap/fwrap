@@ -66,7 +66,9 @@ def add(files):
     assert not isinstance(files, str)
     execproc(['git', 'add'] + list(files))
 
-def commit(message):
+def commit(message, to_add=None):
+    if to_add is not None:
+        add(to_add)
     execproc(['git', 'commit', '-m', message])
 
 def create_branch(name, rev):
