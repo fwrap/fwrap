@@ -175,12 +175,9 @@ def generate_cy_pyx(cy_ast, name, cfg, update_self_sha):
     # Add sha1 to file
     s = buf.getvalue()
     if update_self_sha:
-        print 'Updating sha'
         sha1 = configuration.get_self_sha1(s)
         cfg.update_self_sha1(sha1)
         s = configuration.update_self_sha1_in_string(s, sha1)
-    else:
-        print 'not updating sha'
     return s
 
 def generate_fc_pxd(fc_ast, name):
