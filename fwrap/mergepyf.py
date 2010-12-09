@@ -9,6 +9,7 @@ from fwrap.cy_wrap import _CyArg, CythonExpression
 import pyparsing as prs
 from warnings import warn
 
+TODO_PLACEHOLDER = '##TODO (watch any dependencies that may be further down!) %s'
 prs.ParserElement.enablePackrat()
 
 class CouldNotMergeError(Exception):
@@ -160,7 +161,7 @@ def manual_arg(f_arg, expr):
     # OK, we do not understand the C code in the callstatement in this
     # argument position, but at least introduce a temporary variable
     # and put in a placeholder for user intervention
-    return auxiliary_arg(f_arg, CythonExpression('##TODO: %s' % expr, ()))
+    return auxiliary_arg(f_arg, CythonExpression(TODO_PLACEHOLDER % expr, ()))
 
 def auxiliary_arg(f_arg, expr):
     assert isinstance(expr, CythonExpression)
@@ -295,6 +296,5 @@ class CToCython(object):
             return self.translate(s)
         except ValueError, e:
             warn('Problem in %s: %s' % (func_name, e))
-            return CythonExpression('##TODO (watch any dependencies that '
-                                    'may be further down!) %s' % s, [])
+            return CythonExpression(TODO_PLACEHOLDER % s, [])
         
