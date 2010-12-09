@@ -295,5 +295,6 @@ class CToCython(object):
             return self.translate(s)
         except ValueError, e:
             warn('Problem in %s: %s' % (func_name, e))
-            return CythonExpression('##TODO: %s' % s, [])
+            return CythonExpression('##TODO (watch any dependencies that '
+                                    'may be further down!) %s' % s, [])
         
