@@ -103,6 +103,11 @@ def mergepyf_proc(f_proc, pyf_proc):
 
     # Translate C expressions to Cython
     for arg in set(in_args + out_args + aux_args + call_args):
+    visited = [] # since arguments cannot be hashed
+    for arg in in_args + out_args + aux_args + call_args:
+        if arg in visited:
+            continue
+        visited.append(arg)
         if arg.pyf_check is not None:
             arg.update(cy_check=[c_to_cython_warn(c, func_name)
                                  for c in arg.pyf_check],

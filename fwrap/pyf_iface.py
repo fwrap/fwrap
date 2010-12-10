@@ -589,14 +589,14 @@ class ArgManager(object):
 
         pnames = set([p.name for p in self._params])
         name2o = dict([(o.name, o) for o in (self._args + self._params)])
-        queue = set(self._args[:])
+        queue = self._args[:]
         while queue:
             o = queue.pop()
             for depname in o.depends():
                 dep = name2o[depname]
                 if depname in name2o:
                     # Make sure we get all dependencies in the tree.
-                    queue.add(dep)
+                    queue.append(dep)
                 if depname in pnames:
                     # The parameter is required as part of an argument
                     # declaration, so remove it from pnames.
