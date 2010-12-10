@@ -14,6 +14,8 @@ import re
 from warnings import warn
 
 plain_sizeexpr_re = re.compile(r'\(([a-zA-Z0-9_]+)\)')
+default_array_value_re = re.compile(r'^[()0.,\s]+$') # variations of zero...
+literal_re = re.compile(r'^[0-9.]+$')
 
 class CythonCodeGenerationContext:
     def __init__(self, cfg):
@@ -299,7 +301,7 @@ class _CyArg(_CyArgBase):
             else:
                 pass
         yield initcs
-        
+
         # Check code
         for check in self.cy_check:
             execute_expr, requires = check.substitute(fc_name_to_intern_name)
@@ -516,7 +518,6 @@ class _CyCmplxArg(_CyArg):
 ##         return ['&%s' % self.cy_name]
 
 
-default_array_value_re = re.compile(r'^[()0.,\s]+$') # variations of zero...
 
 class _CyArrayArg(_CyArgBase):
     mandatory = _CyArgBase.mandatory + ('dimension', 'ndims')
@@ -631,8 +632,12 @@ class _CyArrayArg(_CyArgBase):
                             'Cannot automatically allocate explicit-shape intent(out) array '
                             'as expression is too complicated: %s' % expr)
                         can_allocate = False
-                    dimexprs.append(_py_kw_mangler(m.group(1)))
-                requires |= set(dimexprs)
+                    expr = m.group(1)
+                    if literal_re.match(expr) is None:
+                        # not a literal
+                        expr = _py_kw_mangler(m.group(1))
+                        requires.add(expr)
+                    dimexprs.append(expr)
             d['shape'] = ', '.join(dimexprs)
 
         # Figure out the copy flag
