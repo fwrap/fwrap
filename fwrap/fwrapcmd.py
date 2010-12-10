@@ -87,7 +87,8 @@ def create_cmd(opts):
     for filename in opts.fortranfiles:
         cfg.add_wrapped_file(filename)
     # Create wrapper
-    fwrapper.wrap(cfg.get_source_files(), cfg.wrapper_name, cfg)
+    fwrapper.wrap(cfg.get_source_files(), cfg.wrapper_name, cfg,
+                  pyf_to_merge=opts.pyf)
     # Commit
     if use_git:
         message = opts.message
@@ -358,6 +359,9 @@ def create_argument_parser():
     #
     create = subparsers.add_parser('create')
     create.set_defaults(func=create_cmd)
+    create.add_argument('--pyf',
+                        help='pyf file to merge immediately '
+                        '(do not use if you plan to later update!)')
     create.add_argument('-f', '--force', action='store_true',
                         help=('overwrite existing wrapper'))    
     create.add_argument('--nocommit', action='store_true',
