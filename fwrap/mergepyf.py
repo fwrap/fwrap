@@ -42,7 +42,6 @@ def mergepyf_proc(f_proc, pyf_proc):
     # possible, and leave the rest to the user.
     func_name = f_proc.name
     callstat = pyf_proc.pyf_callstatement
-    c_to_cython = CToCython()
 
     if callstat is None:
         # We can simply use the pyf argument list and be satisfied
@@ -79,7 +78,7 @@ def mergepyf_proc(f_proc, pyf_proc):
                 # be reorderd, but also carries a user-given name for matching.
                 arg = pyf_proc.call_args[0].copy()
             else:
-                arg = parse_callstatement_arg(expr, f_arg, pyf_args, c_to_cython)
+                arg = parse_callstatement_arg(expr, f_arg, pyf_args)
             call_args.append(arg)
             
         # Reinsert the extra error-handling and function return arguments
@@ -99,24 +98,24 @@ def mergepyf_proc(f_proc, pyf_proc):
 
     in_args = [copy_or_get(arg) for arg in pyf_proc.in_args]
     out_args = [copy_or_get(arg) for arg in pyf_proc.out_args]
-    in_args = process_in_args(in_args, c_to_cython)
+    in_args = process_in_args(in_args)
     aux_args = ([copy_or_get(arg) for arg in pyf_proc.aux_args])
 
     # Translate C expressions to Cython
     for arg in set(in_args + out_args + aux_args + call_args):
         if arg.pyf_check is not None:
-            arg.update(cy_check=[c_to_cython.warn_translate(c, func_name)
+            arg.update(cy_check=[c_to_cython_warn(c, func_name)
                                  for c in arg.pyf_check],
                        pyf_check=None)
         if arg.pyf_default_value is not None:
             defval = arg.pyf_default_value
-            cy_default_value = c_to_cython.warn_translate(defval, func_name)
+            cy_default_value = c_to_cython_warn(defval, func_name)
             defer = not cy_default_value.is_literal()
             arg.update(cy_default_value=cy_default_value,
                        pyf_default_value=None,
                        defer_init_to_body=defer)
         if arg.is_array and arg.is_explicit_shape:
-            dimexprs = [c_to_cython.warn_translate(dim.sizeexpr, func_name)
+            dimexprs = [c_to_cython_warn(dim.sizeexpr, func_name)
                         for dim in arg.dimension]
             arg.update(cy_explicit_shape_expressions=dimexprs)
 
@@ -131,7 +130,7 @@ callstatement_re = re.compile(r'^.*\(\*f2py_func\)\s*\((.*)\).*$')
 callstatement_arg_re = re.compile(r'^\s*(&)?\s*([a-zA-Z0-9_]+)(\s*\+\s*([a-zA-Z0-9_]+))?\s*$')
 nested_ternary_re = re.compile(r'^\(?(\s*\(\) .*)\?(.*):(.*)\)?$')
 
-def parse_callstatement_arg(arg_expr, f_arg, pyf_args, c_to_cython):
+def parse_callstatement_arg(arg_expr, f_arg, pyf_args):
     # Parse arg_expr, and return a suitable new argument based on pyf_args
     # Returns None for unparseable/too complex expression
     m = callstatement_arg_re.match(arg_expr)
@@ -151,7 +150,7 @@ def parse_callstatement_arg(arg_expr, f_arg, pyf_args, c_to_cython):
             return manual_arg(f_arg, arg_expr)
     else:
         try:
-            cy_expr = c_to_cython.translate(arg_expr)
+            cy_expr = c_to_cython(arg_expr)
         except ValueError:
             return manual_arg(f_arg, arg_expr)
         else:
@@ -173,7 +172,7 @@ def auxiliary_arg(f_arg, expr):
         cy_default_value=expr)
     return arg
 
-def process_in_args(in_args, c_to_cython):
+def process_in_args(in_args):
     # Arguments must be changed as follows:
     # a) Reorder so that arguments with defaults come last
     # b) Parse the default_value into something usable by Cython.
@@ -204,7 +203,7 @@ def process_in_args(in_args, c_to_cython):
 
 
 class CToCython(object):
-    def __init__(self):
+    def __init__(self, doc=False):
 
         def handle_var(s, loc, tok):
             v = tok[0]
@@ -243,9 +242,15 @@ class CToCython(object):
         def handle_func(s, loc, tok):
             func, args = tok[0], tok[1:]
             if func == 'len':
-                return 'np.PyArray_DIMS(%s)[0]' % args[0]
+                if doc:
+                    return '%s.shape[0]' % args[0]
+                else:
+                    return 'np.PyArray_DIMS(%s)[0]' % args[0]
             elif func == 'shape':
-                return 'np.PyArray_DIMS(%s)[%s]' % (args[0], args[1])
+                if doc:
+                    return '%s.shape[%s]' % (args[0], args[1])
+                else:
+                    return 'np.PyArray_DIMS(%s)[%s]' % (args[0], args[1])
             elif func in ('abs',):
                 return '%s(%s)' % (func, ', '.join(args))
 
@@ -289,12 +294,19 @@ class CToCython(object):
                 raise ValueError('Could not auto-translate: %s (%s)' % (s, e))            
             if r[0] == '(' and r[-1] == ')':
                 r = r[1:-1]
-        return CythonExpression(r, self.encountered)
+        return r, self.encountered
 
-    def warn_translate(self, s, func_name):
-        try:
-            return self.translate(s)
-        except ValueError, e:
-            warn('Problem in %s: %s' % (func_name, e))
-            return CythonExpression(TODO_PLACEHOLDER % s, [])
-        
+_translator_cython = CToCython(doc=False)
+_translator_doc = CToCython(doc=True)
+
+def c_to_cython(s):
+    r, encountered = _translator_cython.translate(s)
+    r_doc, _ = _translator_doc.translate(s)
+    return CythonExpression(r, encountered, r_doc)
+
+def c_to_cython_warn(s, func_name):
+    try:
+        return c_to_cython(s)
+    except ValueError, e:
+        warn('Problem in %s: %s' % (func_name, e))
+        return CythonExpression(TODO_PLACEHOLDER % s, [], s)

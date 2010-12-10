@@ -290,7 +290,8 @@ class _CyArg(_CyArgBase):
         # Initialization code
         initcs = CodeSnippet(('init', self.intern_name))
         if self.cy_default_value is not None:
-            value, requires = self.cy_default_value.substitute(fc_name_to_intern_name)
+            value, requires, doc = self.cy_default_value.substitute(fc_name_to_intern_name,
+                                                                    fc_name_to_cy_name)
             initcs.add_requires(('init', r) for r in requires)
             if self.pyf_hide:
                 initcs.put("%s = %s", self.intern_name, value)
@@ -304,14 +305,14 @@ class _CyArg(_CyArgBase):
 
         # Check code
         for check in self.cy_check:
-            execute_expr, requires = check.substitute(fc_name_to_intern_name)
-            doc_expr, _ = check.substitute(fc_name_to_cy_name)
+            execute_expr, requires, doc = check.substitute(fc_name_to_intern_name,
+                                                           fc_name_to_cy_name)
             cs = CodeSnippet(provides=('check', None),
                              requires=[('init', r) for r in requires])
             cs.put('''\
                 if not (%(ex)s):
                     raise ValueError('Condition on arguments not satisfied: %(doc)s')''',
-                   ex=execute_expr, doc=doc_expr)
+                   ex=execute_expr, doc=doc)
             yield cs
 
     def return_tuple_list(self, ctx):
@@ -617,7 +618,8 @@ class _CyArrayArg(_CyArgBase):
             dimexprs = []
             if self.cy_explicit_shape_expressions is not None:
                 for exprobj in self.cy_explicit_shape_expressions:
-                    dimexpr, dimrequires = exprobj.substitute(fc_name_to_intern_name)
+                    dimexpr, dimrequires, doc = exprobj.substitute(fc_name_to_intern_name,
+                                                                   fc_name_to_cy_name)
                     requires |= set(dimrequires)
                     dimexprs.append(dimexpr)
             else:
@@ -1044,12 +1046,17 @@ class CythonExpression(object):
     call substitute with a map from Fortran name of
     arguments/variables to the equivalent in generated Cython code.
     """
-    def __init__(self, template, requires):
+    def __init__(self, template, requires, doc=''):
         self.template = template
         self.requires = requires
+        self.doc = doc
 
-    def substitute(self, variable_map):
-        return self.template % variable_map, [variable_map[x] for x in self.requires]
+    def substitute(self, variable_map, doc_variable_map=None):
+        if doc_variable_map is None:
+            doc_variable_map = variable_map
+        return (self.template % variable_map,
+                [variable_map[x] for x in self.requires],
+                self.doc % doc_variable_map)
 
     def is_literal(self):
         try:
@@ -1061,7 +1068,7 @@ class CythonExpression(object):
 
     def as_literal(self):
         try:
-            expr, requires = self.substitute({})
+            expr, requires, doc = self.substitute({})
         except KeyError:
             raise ValueError('Is not a literal')
         if len(requires) != 0:
