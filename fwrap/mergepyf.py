@@ -101,17 +101,18 @@ def mergepyf_proc(f_proc, pyf_proc):
     in_args = process_in_args(in_args)
     aux_args = ([copy_or_get(arg) for arg in pyf_proc.aux_args])
 
-    # Translate C expressions to Cython
-    for arg in set(in_args + out_args + aux_args + call_args):
+    # Translate C expressions to Cython.
+    # The check directives on arguments are moved to the procedure
+    # (they often contain more than one argument...)
+    checks = []
     visited = [] # since arguments cannot be hashed
     for arg in in_args + out_args + aux_args + call_args:
         if arg in visited:
             continue
         visited.append(arg)
         if arg.pyf_check is not None:
-            arg.update(cy_check=[c_to_cython_warn(c, func_name)
-                                 for c in arg.pyf_check],
-                       pyf_check=None)
+            checks.extend([c_to_cython_warn(c, func_name)
+                           for c in arg.pyf_check])
         if arg.pyf_default_value is not None:
             defval = arg.pyf_default_value
             cy_default_value = c_to_cython_warn(defval, func_name)
@@ -128,6 +129,7 @@ def mergepyf_proc(f_proc, pyf_proc):
                                  in_args=in_args,
                                  out_args=out_args,
                                  aux_args=aux_args,
+                                 checks=checks,
                                  language='pyf')
     return result
 

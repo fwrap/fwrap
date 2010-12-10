@@ -22,6 +22,11 @@ __doc__ = u"""
         ...
     ValueError: Condition on arguments not satisfied: (m >= 1) and (m_hidden <= 10)
 
+    >>> testone(4, 1)
+    Traceback (most recent call last):
+        ...
+    ValueError: Condition on arguments not satisfied: n >= 2
+
     >>> reorders(1, 3, np.arange(4).astype(np.int32))
     (3, 1, array([2, 2, 2, 2], dtype=int32))
 

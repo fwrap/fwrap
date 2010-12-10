@@ -197,7 +197,6 @@ class _CyArgBase(AstNode):
     pyf_optional = False
     
     cy_default_value = None # or CythonExpression
-    cy_check = ()
 
     # Set by mergepyf
     defer_init_to_body = False
@@ -301,19 +300,7 @@ class _CyArg(_CyArgBase):
                            value)
             else:
                 pass
-        yield initcs
-
-        # Check code
-        for check in self.cy_check:
-            execute_expr, requires, doc = check.substitute(fc_name_to_intern_name,
-                                                           fc_name_to_cy_name)
-            cs = CodeSnippet(provides=('check', None),
-                             requires=[('init', r) for r in requires])
-            cs.put('''\
-                if not (%(ex)s):
-                    raise ValueError('Condition on arguments not satisfied: %(doc)s')''',
-                   ex=execute_expr, doc=doc)
-            yield cs
+        return [initcs]
 
     def return_tuple_list(self, ctx):
         assert self.cy_name != constants.ERR_NAME
@@ -855,6 +842,7 @@ class CyProcedure(AstNode):
     pyf_callstatement = None
     language = 'fortran'
     aux_args = ()
+    checks = ()
 
     def _update(self):
         self.arg_mgr = CyArgManager(self.in_args, self.out_args, self.call_args,
@@ -951,6 +939,18 @@ class CyProcedure(AstNode):
             buf.dedent()
 
 
+    def get_checks_code(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
+        for check in self.checks:
+            execute_expr, requires, doc = check.substitute(fc_name_to_intern_name,
+                                                           fc_name_to_cy_name)
+            cs = CodeSnippet(provides=('check', None),
+                             requires=[('init', r) for r in requires])
+            cs.put('''\
+                if not (%(ex)s):
+                    raise ValueError('Condition on arguments not satisfied: %(doc)s')''',
+                   ex=execute_expr, doc=doc)
+            yield cs
+
     def generate_wrapper(self, ctx, buf):
         buf.putln(self.proc_declaration())
         buf.indent()
@@ -963,9 +963,12 @@ class CyProcedure(AstNode):
         # Map Fortran argument names to names used in Cython wrapper
         fc_name_to_intern_name = dict((arg.name, arg.intern_name) for arg in args)
         fc_name_to_cy_name = dict((arg.name, arg.cy_name) for arg in args)
+
+        snippets = []
+        snippets.extend(self.get_checks_code(ctx, fc_name_to_intern_name,
+                                             fc_name_to_cy_name))
         
         visited_args = [] # TODO: Immutable nodes would make us able to make set
-        snippets = []
         # Fetch all code snippets
         for arg in args:
             if arg in visited_args:
