@@ -23,7 +23,10 @@ def mergepyf_ast(cython_ast, cython_ast_from_pyf):
     result = []
     for proc in cython_ast:
         try:
-            result.append(mergepyf_proc(proc, pyf_procs[proc.name]))
+            pyf_proc = pyf_procs.get(proc.name, None)
+            if pyf_proc is None:
+                continue # treat as manually excluded
+            result.append(mergepyf_proc(proc, pyf_proc))
         except CouldNotMergeError, e:
             warn('Could not import procedure "%s" from .pyf, '
                  'please modify manually' % proc.name)
@@ -113,6 +116,7 @@ def mergepyf_proc(f_proc, pyf_proc):
         if arg.pyf_check is not None:
             checks.extend([c_to_cython_warn(c, func_name)
                            for c in arg.pyf_check])
+            arg.update(pyf_check=[])
         if arg.pyf_default_value is not None:
             defval = arg.pyf_default_value
             cy_default_value = c_to_cython_warn(defval, func_name)
