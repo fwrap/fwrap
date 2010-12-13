@@ -53,3 +53,11 @@ C configure-flags: --f77binding --f2py-comparison
       enddo
       end subroutine
       
+c$$$      subroutine tricky_case(n, arr)
+c$$$      integer arr(n)
+c$$$      integer n, i
+c$$$      do i = 1, n
+c$$$         arr(i) = i
+c$$$      enddo
+c$$$      end subroutine
+c$$$      

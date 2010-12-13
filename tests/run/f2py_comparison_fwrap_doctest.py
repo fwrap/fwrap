@@ -147,6 +147,14 @@ depend effect on array vs. array size::
 
 
     #>>> n_given_array_argrev(5, np.zeros(4, dtype=np.int32))
+
+##     >>> tricky_case(5, np.zeros(5, dtype=np.int32))
+##     array([1, 2, 3, 4, 5], dtype=int32)
+
+##     >>> tricky_case(None, np.zeros(5, dtype=np.int32))
+##     array([1, 2, 3, 0, 0], dtype=int32)
+
+
     
 """
 

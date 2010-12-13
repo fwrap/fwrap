@@ -33,6 +33,12 @@ python module f2py_comparison_f2py
       integer, intent(in), depend(arr) :: n
       end subroutine
 
+!!$      subroutine tricky_case(n, arr)
+!!$        integer, optional, dimension(n), intent(in,out) :: arr = 0.
+!!$        integer, intent(in) :: n = len(arr) - 2
+!!$      end subroutine tricky_case
+        
+
     end interface 
 end python module f2py_comparison_f2py
 
