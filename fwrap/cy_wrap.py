@@ -548,8 +548,6 @@ class _CyArrayArg(_CyArgBase):
         # find the expressions for constructing the output argument
         self.is_explicit_shape = all(dim.is_explicit_shape
                                      for dim in self.dimension)
-        if self.pyf_hide:
-            raise NotImplementedError()
         if self.pyf_optional and not self.is_explicit_shape:
             raise RuntimeError('Cannot have an optional array without explicit shape')
         # Note: The following are set to something else in
@@ -558,6 +556,9 @@ class _CyArrayArg(_CyArgBase):
         if self.npy_enum is None:
             self.npy_enum = self.dtype.npy_enum
 
+        if self.pyf_hide and self.cy_default_value is None:
+            self.cy_default_value = CythonExpression('0', [], '0')
+            
         if self.cy_default_value is not None:
             literal = self.cy_default_value.as_literal()
             if default_array_value_re.match(literal) is None:
@@ -670,8 +671,12 @@ class _CyArrayArg(_CyArgBase):
                          [('init', r) for r in requires])
 
         if can_allocate:
+            if self.pyf_hide:
+                d['from'] = 'None'
+            else:
+                d['from'] = self.cy_name
             ctx.use_utility_code(explicit_shape_array_utility_code)
-            cs.putln('%(intern)s, %(extern)s = fw_explicitshapearray(%(extern)s, %(dtenum)s, '
+            cs.putln('%(intern)s, %(extern)s = fw_explicitshapearray(%(from)s, %(dtenum)s, '
                      '%(ndim)d, [%(shape)s], %(copy)s)' % d)
         else:
             cs.putln('%(intern)s, %(extern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '

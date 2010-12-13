@@ -75,6 +75,13 @@ python module pyf_support
           complex, intent(in,out) :: z = (1., 0.)
         end subroutine
 
+
+        subroutine temparray(n, x, y)
+          integer, dimension(n) :: x, y
+          intent(in,out) :: x
+          intent(hide) :: y
+          integer :: n
+        end subroutine temparray
     end interface 
 end python module pyf_support
 

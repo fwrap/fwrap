@@ -114,3 +114,16 @@ C     Then do arr = arange(m*n).reshape(m, n)
       complex z
       z = z * 2
       end subroutine
+
+      subroutine temparray(n, x, y)
+      integer x(n), y(n)
+      integer i, n
+      do i = 1, n
+         y(i) = x(i)
+      enddo
+      do i = 1, n
+         x(i) = y(i) * 2
+      enddo
+      end subroutine
+      
+      

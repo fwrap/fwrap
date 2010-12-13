@@ -156,6 +156,11 @@ Default arguments:
     >>> cdefault()
     (2+0j)
 
+Temporary array:
+
+    >>> temparray(3, np.ones((3,), dtype=np.int32))
+    array([2, 2, 2], dtype=int32)
+    
 
 """
 
