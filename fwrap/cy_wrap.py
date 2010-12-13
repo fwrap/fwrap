@@ -192,6 +192,7 @@ class _CyArgBase(AstNode):
     pyf_hide = False
     pyf_default_value = None
     pyf_check = []
+    pyf_depend = []
     pyf_overwrite_flag = False
     pyf_overwrite_flag_default = None
     pyf_optional = False

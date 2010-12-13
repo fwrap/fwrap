@@ -186,7 +186,8 @@ def _get_pyf_annotations(arg):
                        pyf_overwrite_flag_default=overwrite_flag_default,
                        # optional fills a rather different role in pyf files
                        # compared to in F90 files, so we use a seperate flag
-                       pyf_optional=arg.is_optional()
+                       pyf_optional=arg.is_optional(),
+                       pyf_depend=arg.depend,
                        )
 
     return intent, annotations
