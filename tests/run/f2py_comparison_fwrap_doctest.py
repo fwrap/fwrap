@@ -98,5 +98,55 @@ Out arrays::
     array([[1, 2, 3],
            [4, 5, 6]], dtype=int32)
 
+
+depend effect on array vs. array size::
+
+    # array_given_n: arr,n
+    # array_given_n: n,arr
+    # n_given_array: arr,[n]
+    # n_given_array_argrev: n, arr
+
+
+    >>> array_given_n(np.zeros(4, dtype=np.int32), 4)
+    array([1, 2, 3, 4], dtype=int32)
+    
+    >>> raises_error(array_given_n, np.zeros(4, dtype=np.int32), 3)
+    True
+
+    >>> raises_error(array_given_n, np.zeros(4, dtype=np.int32), 5)
+    True
+
+    # Accept diff.:>>> raises_error(array_given_n, np.zeros(4, dtype=np.int32))
+    # True
+
+    >>> array_given_n_argrev(4, np.zeros(4, dtype=np.int32))
+    array([1, 2, 3, 4], dtype=int32)
+    >>> raises_error(array_given_n_argrev, 5, np.zeros(4, dtype=np.int32))
+    True
+    >>> raises_error(array_given_n_argrev, 3, np.zeros(4, dtype=np.int32))
+    True
+    
+    # Accept diff.: >>> raises_error(array_given_n_argrev, np.zeros(4, dtype=np.int32))
+    #True
+
+    >>> n_given_array(np.zeros(4, dtype=np.int32), 4)
+    array([1, 2, 3, 4], dtype=int32)
+    >>> n_given_array(np.zeros(4, dtype=np.int32), 3)
+    array([1, 2, 3, 0], dtype=int32)
+    >>> raises_error(n_given_array, np.zeros(4, dtype=np.int32), 5)
+    True
+    >>> n_given_array(np.zeros(4, dtype=np.int32))
+    array([1, 2, 3, 4], dtype=int32)
+
+    >>> n_given_array_argrev(4, np.zeros(4, dtype=np.int32))
+    array([1, 2, 3, 4], dtype=int32)
+    >>> n_given_array_argrev(3, np.zeros(4, dtype=np.int32))
+    array([1, 2, 3, 0], dtype=int32)
+    >>> raises_error(n_given_array_argrev, np.zeros(4, dtype=np.int32))
+    True
+
+
+    #>>> n_given_array_argrev(5, np.zeros(4, dtype=np.int32))
+    
 """
 

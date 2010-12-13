@@ -21,3 +21,35 @@ C configure-flags: --f77binding --f2py-comparison
       enddo
       end subroutine
 
+      subroutine array_given_n(arr, n)
+      integer arr(n)
+      integer n, i
+      do i = 1, n
+         arr(i) = i
+      enddo
+      end subroutine
+
+      subroutine array_given_n_argrev(n, arr)
+      integer arr(n)
+      integer n, i
+      do i = 1, n
+         arr(i) = i
+      enddo
+      end subroutine
+
+      subroutine n_given_array(arr, n)
+      integer arr(n)
+      integer n, i
+      do i = 1, n
+         arr(i) = i
+      enddo
+      end subroutine
+
+      subroutine n_given_array_argrev(n, arr)
+      integer arr(n)
+      integer n, i
+      do i = 1, n
+         arr(i) = i
+      enddo
+      end subroutine
+      

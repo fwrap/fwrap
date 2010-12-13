@@ -13,6 +13,26 @@ python module f2py_comparison_f2py
       integer intent(in) :: m
       end subroutine
 
+      subroutine array_given_n(arr, n)
+      integer, dimension(n), intent(in, out), depend(n) :: arr
+      integer, intent(in) :: n
+      end subroutine
+
+      subroutine array_given_n_argrev(n, arr)
+      integer, dimension(n), intent(in, out), depend(n) :: arr
+      integer, intent(in) :: n
+      end subroutine
+
+      subroutine n_given_array(arr, n)
+      integer, dimension(n), intent(in, out) :: arr
+      integer, intent(in), depend(arr) :: n
+      end subroutine
+
+      subroutine n_given_array_argrev(n, arr)
+      integer, dimension(n), intent(in, out) :: arr
+      integer, intent(in), depend(arr) :: n
+      end subroutine
+
     end interface 
 end python module f2py_comparison_f2py
 
