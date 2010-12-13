@@ -117,6 +117,16 @@ def mergepyf_proc(f_proc, pyf_proc):
             checks.extend([c_to_cython_warn(c, func_name)
                            for c in arg.pyf_check])
             arg.update(pyf_check=[])
+
+        if arg.pyf_default_value is None and not arg.is_array:
+            for dep in arg.pyf_depend:
+                # If one depends on a 1-dim array, set default value to len(arr)
+                dep_arg = arg_by_name[dep]
+                if dep_arg.is_array and len(dep_arg.dimension.dims) == 1:
+                    if arg.pyf_default_value is not None:
+                        raise RuntimeError('depends on multiple array')
+                    arg.pyf_default_value = 'len(%s)' % dep
+            
         if arg.pyf_default_value is not None:
             defval = arg.pyf_default_value
             cy_default_value = c_to_cython_warn(defval, func_name)
