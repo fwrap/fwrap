@@ -86,6 +86,15 @@ C configure-flags: --f77binding
         x = 'F'
       end subroutine
 
+      subroutine onedee(n, x)
+      integer n, i
+      integer x(n)
+      do i = 1, n
+         x(i) = i
+      enddo
+      end subroutine
+
+
 C TODO: Does not work
 c$$$      logical function lsame(ca,cb)
 c$$$      character ca,cb

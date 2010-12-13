@@ -52,4 +52,29 @@ __doc__ = u'''
     
     >>> emit_f() # TODO Python 3
     'F'
+
+    >>> explicit_shape(n1 + 1, n2, ain, aout, ainout, ano)
+    Traceback (most recent call last):
+        ...
+    RuntimeError: an error was encountered when calling the 'explicit_shape' wrapper.
+
+    >>> explicit_shape(n1, n2 + 1, ain, aout, ainout, ano)
+    Traceback (most recent call last):
+        ...
+    RuntimeError: an error was encountered when calling the 'explicit_shape' wrapper.
+
+    >>> explicit_shape(n1, n2 - 1, ain, aout, ainout, ano)
+    Traceback (most recent call last):
+        ...
+    RuntimeError: an error was encountered when calling the 'explicit_shape' wrapper.
+
+    >>> onedee(4, np.zeros(4, dtype=np.int32))
+    (4, array([1, 2, 3, 4], dtype=int32))
+    >>> onedee(3, np.zeros(4, dtype=np.int32))
+    (3, array([1, 2, 3, 0], dtype=int32))
+    >>> onedee(4, np.zeros(3, dtype=np.int32))
+    Traceback (most recent call last):
+        ...
+    RuntimeError: an error was encountered when calling the 'onedee' wrapper.
+    
 '''
