@@ -94,6 +94,16 @@ C configure-flags: --f77binding
       enddo
       end subroutine
 
+      function logicalfunc(x)
+      logical x
+      integer logicalfunc
+      if (x) then
+         logicalfunc = 10
+      else 
+         logicalfunc = 0
+      endif
+      end function
+
 
 C TODO: Does not work
 c$$$      logical function lsame(ca,cb)

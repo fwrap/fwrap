@@ -567,13 +567,14 @@ class FcScalarPtrArg(FcArg):
 
     def get_call_name(self, cfg):
         if cfg.f77binding:
-            return self.name
+            FcArg._set_intern_name(self)
+            return FcArg.get_call_name(self, cfg)
         else:
             return self.intern_name
 
     def pre_call_code(self, cfg):
         if cfg.f77binding:
-            return []
+            return FcArg.pre_call_code(self, cfg)
         else:
             return ['call c_f_pointer(%s, %s)' %
                     (self.extern_arg.name,
@@ -581,11 +582,8 @@ class FcScalarPtrArg(FcArg):
 
     def extern_declarations(self, cfg):
         if cfg.f77binding:
-            f77_extern_var = pyf.Var(name=self.name,
-                                     dtype=self.intern_dtype,
-                                     isptr=False)
-            return [self.len_arg.declaration(cfg),
-                    f77_extern_var.declaration(cfg)]
+            FcArg._set_extern_args(self)
+            return FcArg.extern_declarations(self, cfg)
         else:
             return super(FcScalarPtrArg, self).extern_declarations(cfg)
 

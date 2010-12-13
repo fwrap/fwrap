@@ -233,13 +233,24 @@ class _CyArg(_CyArgBase):
     is_array = False
 
     def _update(self):
-        if self.defer_init_to_body and not self.pyf_hide:
-            self.intern_name = '%s_' % self.cy_name
-        else:
-            self.intern_name = self.cy_name
         self.cy_dtype_name = self._get_cy_dtype_name()
         if self.cy_default_value is not None:
             assert isinstance(self.cy_default_value, CythonExpression)
+
+        self.intern_name = self.cy_name
+        if self.defer_init_to_body:
+            self.extern_typedecl = 'object'
+            self.intern_typedecl = self.cy_dtype_name
+            if not self.pyf_hide:
+                self.intern_name = '%s_' % self.cy_name
+        elif (self.dtype is not None and self.dtype.type == 'logical'
+              and self.intent in ('in', 'inout', None)):
+            self.extern_typedecl = 'bint'
+            self.intern_typedecl = self.cy_dtype_name
+            self.intern_name = '%s_' % self.cy_name
+        else:
+            self.extern_typedecl = self.cy_dtype_name
+            self.intern_typedecl = None
 
     def _get_cy_dtype_name(self):
         return self.ktp
@@ -263,16 +274,20 @@ class _CyArg(_CyArgBase):
                 default = self.cy_default_value.as_literal()
         else:
             default = None
-        typedecl = 'object' if self.defer_init_to_body else self.cy_dtype_name
-        return [("%s %s" % (typedecl, self.cy_name), default)]
+        return [("%s %s" % (self.extern_typedecl, self.cy_name), default)]
 
     def docstring_extern_arg_list(self):
         assert not self.pyf_hide and self.intent in ('in', 'inout', None)
         return [self.cy_name]
 
-    def intern_declarations(self, ctx, extern_decl_made):        
-        if self.defer_init_to_body or not extern_decl_made:
-            return ["cdef %s %s" % (self.cy_dtype_name, self.intern_name)]
+    def intern_declarations(self, ctx, extern_decl_made):
+        result = []
+        if not extern_decl_made and self.intern_typedecl is None:
+            typedecl = self.extern_typedecl
+        else:
+            typedecl = self.intern_typedecl
+        if self.intern_typedecl is not None or not extern_decl_made:
+            return ["cdef %s %s" % (typedecl, self.intern_name)]
         else:
             return []
 
@@ -288,16 +303,20 @@ class _CyArg(_CyArgBase):
     def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
         # Initialization code
         initcs = CodeSnippet(('init', self.intern_name))
+        if (self.dtype is not None and self.dtype.type == 'logical' and
+            self.intent in ('in', 'inout', None)):
+            # emulates PyObject_IsTrue used by f2py:
+            initcs.put('%s = 1 if %s else 0' % (self.intern_name, self.cy_name))
         if self.cy_default_value is not None:
             value, requires, doc = self.cy_default_value.substitute(fc_name_to_intern_name,
                                                                     fc_name_to_cy_name)
             initcs.add_requires(('init', r) for r in requires)
             if self.pyf_hide:
-                initcs.put("%s = %s", self.intern_name, value)
+                initcs.putln("%s = %s", self.intern_name, value)
             elif self.defer_init_to_body:
-                initcs.put("%s = %s if (%s is not None) else %s",
-                           self.intern_name, self.cy_name, self.cy_name,
-                           value)
+                initcs.putln("%s = %s if (%s is not None) else %s",
+                             self.intern_name, self.cy_name, self.cy_name,
+                             value)
             else:
                 pass
         return [initcs]

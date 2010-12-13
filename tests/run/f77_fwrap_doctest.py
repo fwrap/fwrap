@@ -31,6 +31,15 @@ def test_results(func, args, results):
             return False
     return True
 
+
+class MyTrue(object):
+    def __nonzero__(self):
+        return True
+
+class MyFalse(object):
+    def __nonzero__(self):
+        return False
+
 __doc__ = u'''
     >>> int_default(1,2) == (6, 2)
     True
@@ -76,5 +85,15 @@ __doc__ = u'''
     Traceback (most recent call last):
         ...
     RuntimeError: an error was encountered when calling the 'onedee' wrapper.
+
+
+    >>> logicalfunc(True)
+    (10, 1)
+    >>> logicalfunc(False)
+    (0, 0)
+    >>> logicalfunc(MyTrue())
+    (10, 1)
+    >>> logicalfunc(MyFalse())
+    (0, 0)
     
 '''
