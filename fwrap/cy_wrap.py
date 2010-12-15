@@ -567,6 +567,28 @@ class _CyArrayArg(_CyArgBase):
                     'Only support zero default array values for now, not: %s' %
                     self.cy_default_value)
 
+        self._shape_expressions = self.cy_explicit_shape_expressions
+        if self._shape_expressions is None:
+            self._shape_expressions = []
+            # If Fortran statements have not been parsed and
+            # translated, we only support the simplest cases.
+            # TODO: Fix this up (compile Fortran-side function to
+            # give resulting shape?)
+            for i, expr in enumerate([dim.sizeexpr for dim in self.dimension]):
+                m = None if expr is None else plain_sizeexpr_re.match(expr)
+                if m is not None:
+                    expr = m.group(1)
+                    if literal_re.match(expr):
+                        # a literal
+                        exprobj = CythonExpression(expr, [], expr)
+                    else:
+                        exprobj = CythonExpression('%%(%s)s' % expr,
+                                                   [expr],
+                                                   '%%(%s)s' % expr)
+                else:
+                    exprobj = None
+                self._shape_expressions.append(exprobj)
+
     def is_optional(self):
         return (self.pyf_optional or (self.is_explicit_shape and 
                 (self.intent == 'out' or
@@ -619,36 +641,29 @@ class _CyArrayArg(_CyArgBase):
         # involves trying to parse the size expression to see if it
         # is simple enough.
         # TODO: Move parsing of shapes to _fc.
+
+        
         can_allocate = self.is_optional()
-        requires = set() # dependencies on other variables
+        if can_allocate and None in self._shape_expressions:
+            warn(
+                'Cannot automatically allocate explicit-shape intent(out) array '
+                'as expression is too complicated: %s' %
+                self.dimension.dims[expr.index(None)].sizeexpr)
+            can_allocate = False
+
+        requires = set()
+        shape_exprs = []
+        shape_docs = []
+        for exprobj in self._shape_expressions:
+            if exprobj is not None:
+                expr, dimrequires, doc = exprobj.substitute(fc_name_to_intern_name,
+                                                            fc_name_to_cy_name)
+                shape_exprs.append(expr)
+                if can_allocate:
+                    requires.update(dimrequires)
+                shape_docs.append(doc)
         if can_allocate:
-            # Parse size-exprs and generate d['shape']
-            dimexprs = []
-            if self.cy_explicit_shape_expressions is not None:
-                for exprobj in self.cy_explicit_shape_expressions:
-                    dimexpr, dimrequires, doc = exprobj.substitute(fc_name_to_intern_name,
-                                                                   fc_name_to_cy_name)
-                    requires |= set(dimrequires)
-                    dimexprs.append(dimexpr)
-            else:
-                # If Fortran statements have not been parsed and
-                # translated, we only support the simplest cases.
-                # TODO: Fix this up (compile Fortran-side function to
-                # give resulting shape?)
-                for i, expr in enumerate([dim.sizeexpr for dim in self.dimension]):
-                    m = plain_sizeexpr_re.match(expr)
-                    if not m:
-                        warn(
-                            'Cannot automatically allocate explicit-shape intent(out) array '
-                            'as expression is too complicated: %s' % expr)
-                        can_allocate = False
-                    expr = m.group(1)
-                    if literal_re.match(expr) is None:
-                        # not a literal
-                        expr = _py_kw_mangler(m.group(1))
-                        requires.add(expr)
-                    dimexprs.append(expr)
-            d['shape'] = ', '.join(dimexprs)
+            d['shape'] = ', '.join(shape_exprs)
 
         # Figure out the copy flag
         if self.pyf_overwrite_flag:
@@ -1157,7 +1172,6 @@ cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy):
         flags |= np.NPY_ENSURECOPY
     result = np.PyArray_FROMANY(value, typenum, 0, 0, flags)
 
-
     if ndim == result.ndim:
         return result, result
     else:
@@ -1251,3 +1265,21 @@ cdef char fw_aschar(object s):
     else:
         return buf[0]
 """
+
+## explicit_shape_array_utility_code = u"""
+## cdef object fw_explicitarray(object value, int typenum, int ndim,
+##                              np.intp_t *shape, bint copy, bint allow_larger):
+##     cdef np.ndarray result = fw_asfortranarray(value, typenum, ndim, copy)
+##     cdef int i
+##     cdef Py_ssize_t *result_shape = PyArray_DIMS(result)
+##     if ndim == 0:
+##         return result
+##     for i in range(0, ndim - 1):
+##         if result_shape[i] != shape[i]
+##             and not (allow_larger and result_shape[i] > shape[i])): 
+##             raise ValueError("array has wrong shape")
+##     if (result_shape[ndim - 1] < shape[ndim - 1] or
+##         (not allow_larger and result_shape[ndim - 1] > shape[ndim - 1]):
+##         raise ValueError("array has wrong shape")
+##     return result
+## """
