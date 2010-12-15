@@ -65,18 +65,21 @@ __doc__ = u'''
     >>> explicit_shape(n1 + 1, n2, ain, aout, ainout, ano)
     Traceback (most recent call last):
         ...
-    RuntimeError: an error was encountered when calling the 'explicit_shape' wrapper.
+    ValueError: (n1 == ain.shape[0]) not satisifed
 
     >>> explicit_shape(n1, n2 + 1, ain, aout, ainout, ano)
     Traceback (most recent call last):
         ...
-    RuntimeError: an error was encountered when calling the 'explicit_shape' wrapper.
+    ValueError: (0 <= n2 <= ain.shape[1]) not satisifed
 
-    >>> explicit_shape(n1, n2 - 1, ain, aout, ainout, ano)
-    Traceback (most recent call last):
-        ...
-    RuntimeError: an error was encountered when calling the 'explicit_shape' wrapper.
-
+    >>> r1, r2, r3 = explicit_shape(n1, n2 - 1, ain, aout, ainout, ano)
+    >>> np.all(r1[:, :n2-1] == ain[:, :n2-1])
+    True
+    >>> np.all(r2[:, :n2-1] == ain[:, :n2-1] + ainout_[:, :n2-1])
+    True
+    >>> np.all(r3[:, :n2-1] == ainout_[:, :n2-1])
+    True
+    
     >>> onedee(4, np.zeros(4, dtype=np.int32))
     (4, array([1, 2, 3, 4], dtype=int32))
     >>> onedee(3, np.zeros(4, dtype=np.int32))
@@ -84,7 +87,7 @@ __doc__ = u'''
     >>> onedee(4, np.zeros(3, dtype=np.int32))
     Traceback (most recent call last):
         ...
-    RuntimeError: an error was encountered when calling the 'onedee' wrapper.
+    ValueError: (0 <= n <= x.shape[0]) not satisifed
 
 
     >>> logicalfunc(True)

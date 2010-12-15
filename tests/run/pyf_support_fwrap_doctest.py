@@ -43,11 +43,11 @@ Test truncating array and playing with bounds of explicit-shape array::
     >>> fort_sum_simple(r, -1)
     Traceback (most recent call last):
     ...
-    RuntimeError: an error was encountered when calling the 'fort_sum_simple' wrapper.
+    ValueError: (0 <= n <= arr.shape[0]) not satisifed
     >>> fort_sum_simple(r, 11)
     Traceback (most recent call last):
     ...
-    RuntimeError: an error was encountered when calling the 'fort_sum_simple' wrapper.
+    ValueError: (0 <= n <= arr.shape[0]) not satisifed
     
     >>> fort_sum(r)
     45.0
@@ -73,7 +73,7 @@ Test offx argument::
     >>> fort_sum(r, 5, 6)
     Traceback (most recent call last):
         ...
-    RuntimeError: an error was encountered when calling the 'fort_sum' wrapper.
+    ValueError: (0 <= n <= arr.shape[0] - offx) not satisifed
     >>> fort_sum(r, 0, 9)
     0.0
     >>> fort_sum(r, 1, 9)
@@ -81,7 +81,7 @@ Test offx argument::
     >>> fort_sum(r, 2, 9)
     Traceback (most recent call last):
         ...
-    RuntimeError: an error was encountered when calling the 'fort_sum' wrapper.
+    ValueError: (0 <= n <= arr.shape[0] - offx) not satisifed
 
 
     >>> fort_sum(r, offx=5)

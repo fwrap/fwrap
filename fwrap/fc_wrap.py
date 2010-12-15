@@ -520,16 +520,14 @@ class FcArrayArg(FcArg):
         # NumPy array
         ck = []
         assert len(arg_dims) == len(buf_dims)
-        if len(arg_dims) == 1:
-            arg_dim, = arg_dims
-            buf_dim, = buf_dims
+        ndim = len(arg_dims)
+        for idx, (arg_dim, buf_dim) in enumerate(zip(arg_dims, buf_dims)):
             if arg_dim.is_explicit_shape and buf_dim.is_explicit_shape:
-                # Truncation of array is allowed
-                ck.append('%s .lt. 0 .or. %s .gt. %s' %
-                          (arg_dim.sizeexpr, arg_dim.sizeexpr, buf_dim.sizeexpr))
-        else:
-            for arg_dim, buf_dim in zip(arg_dims, buf_dims):
-                if arg_dim.is_explicit_shape and buf_dim.is_explicit_shape:
+                if idx == ndim - 1:
+                    # Truncation of array is allowed
+                    ck.append('%s .lt. 0 .or. %s .gt. %s' %
+                              (arg_dim.sizeexpr, arg_dim.sizeexpr, buf_dim.sizeexpr))
+                else:
                     ck.append('%s .ne. %s' % (arg_dim.sizeexpr, buf_dim.sizeexpr))
         return ' .or. '.join(ck)
 

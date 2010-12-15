@@ -186,7 +186,10 @@ class CodeSnippet(object):
     def put(self, block, *args, **kw):
         block = dedent(block)
         block = _format(block, *args, **kw)
-        self.lines.extend(block.split('\n'))
+        lines = block.split('\n')
+        if len(lines[-1]) == 0:
+            del lines[-1]
+        self.lines.extend(lines)
 
     def __eq__(self, other):
         if self is other:

@@ -14,7 +14,7 @@ python module pyf_support
             ! The in,out of f2py corresponds to the "inout" of fwrap.
             ! The "inout" of f2py is not supported
             integer intent(in,out) :: xp, zp
-            integer intent(in,out) :: yp(5)
+            integer intent(in,out) :: yp(4)
         end subroutine
 
         function fort_sum_simple(n, arr) result(x)

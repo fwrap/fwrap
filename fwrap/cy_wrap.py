@@ -652,18 +652,18 @@ class _CyArrayArg(_CyArgBase):
             can_allocate = False
 
         requires = set()
-        shape_exprs = []
-        shape_docs = []
+        shape_info = [] # of tuple (expr, requires, doc)
         for exprobj in self._shape_expressions:
             if exprobj is not None:
                 expr, dimrequires, doc = exprobj.substitute(fc_name_to_intern_name,
                                                             fc_name_to_cy_name)
-                shape_exprs.append(expr)
+                shape_info.append((expr, dimrequires, doc))
                 if can_allocate:
                     requires.update(dimrequires)
-                shape_docs.append(doc)
+            else:
+                shape_info.append(None)
         if can_allocate:
-            d['shape'] = ', '.join(shape_exprs)
+            d['shape'] = ', '.join(expr for expr, _, _ in shape_info)
 
         # Figure out the copy flag
         if self.pyf_overwrite_flag:
@@ -698,15 +698,52 @@ class _CyArrayArg(_CyArgBase):
             cs.putln('%(intern)s, %(extern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '
                      '%(ndim)d, %(copy)s)' % d)
 
+        #
         # May need to copy shape into new array as well
+        #
         if ctx.cfg.f77binding or self.mem_offset_code is not None:
             ctx.use_utility_code(copy_shape_utility_code)
             cs.putln('fw_copyshape(%s, np.PyArray_DIMS(%s), %d)',
                      self.shape_var_name, self.intern_name, self.ndims)
+            arr_shape_expr = self.shape_var_name
+        else:
+            arr_shape_expr = 'np.PyArray_DIMS(%s)' % self.intern_name
+            
         if self.mem_offset_code is not None:
+            if self.ndims != 1:
+                raise NotImplementedError()
             cs.putln('%s[0] -= %s', self.shape_var_name, self.mem_offset_code)
-        return [cs]
 
+        yield cs
+
+        #
+        # Code for checking explicit shapes in f77binding mode
+        #
+        if ctx.cfg.f77binding:
+            cs = CodeSnippet(('check', self.intern_name),
+                             [('init', self.intern_name)])
+            d.update(arr_shape_expr=arr_shape_expr)
+            for idx, info in enumerate(shape_info):
+                if info is None:
+                    continue
+                expr, req, doc = info
+                d.update(idx=idx, expr=expr, doc=doc,
+                         mem_offset_code=('' if self.mem_offset_code is None
+                                          else ' - ' + self.mem_offset_code))
+                cs.add_requires(('init', r) for r in req)
+                if idx == len(shape_info) - 1: # last dimension, can truncate
+                    cs.put(
+                        '''\
+                        if not (0 <= %(expr)s <= %(arr_shape_expr)s[%(idx)d]):
+                            raise ValueError("(0 <= %(doc)s <= %(extern)s.shape[%(idx)d]%(mem_offset_code)s) not satisifed")
+                    ''' % d)
+                else:
+                    cs.put(
+                        '''\
+                        if %(expr)s != %(arr_shape_expr)s[%(idx)d]:
+                            raise ValueError("(%(doc)s == %(extern)s.shape[%(idx)d]) not satisifed")
+                    ''' % d)
+            yield cs
 
     def pre_call_code(self, ctx):
         return []
