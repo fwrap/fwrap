@@ -533,6 +533,7 @@ class _CyArrayArg(_CyArgBase):
     # Optional
     mem_offset_code = None
     cy_explicit_shape_expressions = None
+    truncation_allowed = True # arr(n) : can n < arr.shape[0]?
 
     # Set from deduplicator
     npy_enum = None
@@ -731,7 +732,8 @@ class _CyArrayArg(_CyArgBase):
                          mem_offset_code=('' if self.mem_offset_code is None
                                           else ' - ' + self.mem_offset_code))
                 cs.add_requires(('init', r) for r in req)
-                if idx == len(shape_info) - 1: # last dimension, can truncate
+                if self.truncation_allowed and idx == len(shape_info) - 1:
+                    # last dimension, can truncate
                     cs.put(
                         '''\
                         if not (0 <= %(expr)s <= %(arr_shape_expr)s[%(idx)d]):

@@ -120,13 +120,26 @@ def mergepyf_proc(f_proc, pyf_proc):
 
         if arg.pyf_default_value is None and not arg.is_array:
             for dep in arg.pyf_depend:
-                # If one depends on a 1-dim array, set default value to len(arr)
+                # If one lists an *explicit* depends on a 1-dim array,
+                # set default value to len(arr). TODO: Implicit depends.
                 dep_arg = arg_by_name[dep]
                 if dep_arg.is_array and len(dep_arg.dimension.dims) == 1:
                     if arg.pyf_default_value is not None:
                         raise RuntimeError('depends on multiple array')
                     arg.pyf_default_value = 'len(%s)' % dep
-            
+
+        if arg.is_array and arg.is_explicit_shape:
+            dimexprs = [c_to_cython_warn(dim.sizeexpr, func_name)
+                        for dim in arg.dimension]
+            arg.update(cy_explicit_shape_expressions=dimexprs)
+
+        if arg.is_array:
+            # f2py semantics oddity: If one *explicitly* depends the array
+            # on the shape scalar, disable truncation
+            last_dim_deps = arg.dimension.dims[-1].depnames
+            if len(last_dim_deps.intersection(arg.pyf_depend)) > 0:
+                arg.update(truncation_allowed=False)
+
         if arg.pyf_default_value is not None:
             defval = arg.pyf_default_value
             cy_default_value = c_to_cython_warn(defval, func_name)
@@ -134,10 +147,6 @@ def mergepyf_proc(f_proc, pyf_proc):
             arg.update(cy_default_value=cy_default_value,
                        pyf_default_value=None,
                        defer_init_to_body=defer)
-        if arg.is_array and arg.is_explicit_shape:
-            dimexprs = [c_to_cython_warn(dim.sizeexpr, func_name)
-                        for dim in arg.dimension]
-            arg.update(cy_explicit_shape_expressions=dimexprs)
 
     result = f_proc.copy_and_set(call_args=call_args,
                                  in_args=in_args,

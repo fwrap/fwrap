@@ -21,6 +21,14 @@ C configure-flags: --f77binding --f2py-comparison
       enddo
       end subroutine
 
+      subroutine nodeps(arr, n)
+      integer arr(n)
+      integer n, i
+      do i = 1, n
+         arr(i) = i
+      enddo
+      end subroutine
+
       subroutine array_given_n(arr, n)
       integer arr(n)
       integer n, i
@@ -52,6 +60,16 @@ C configure-flags: --f77binding --f2py-comparison
          arr(i) = i
       enddo
       end subroutine
+
+      subroutine swilk(x,n,a,n2)
+        real x(n), a(n2)
+        integer n, n2, i
+        write (*,*) n2
+        do i = 1, n2
+           a(i) = x(i) + x(2 * i) + a(i)
+        enddo
+      end subroutine swilk
+
       
 c$$$      subroutine tricky_case(n, arr)
 c$$$      integer arr(n)

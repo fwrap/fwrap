@@ -13,6 +13,11 @@ python module f2py_comparison_f2py
       integer intent(in) :: m
       end subroutine
 
+      subroutine nodeps(arr, n)
+      integer, dimension(n), intent(in, out) :: arr
+      integer, intent(in) :: n
+      end subroutine
+
       subroutine array_given_n(arr, n)
       integer, dimension(n), intent(in, out), depend(n) :: arr
       integer, intent(in) :: n
@@ -33,12 +38,20 @@ python module f2py_comparison_f2py
       integer, intent(in), depend(arr) :: n
       end subroutine
 
+
+      subroutine swilk(x,n,a,n2)
+        real dimension(n),intent(in) :: x
+        integer depend(x),intent(hide) :: n = shape(x,0)
+        integer intent(hide),depend(n) :: n2=n/2
+        real intent(in,out), dimension(n2), depend(n2) :: a
+      end subroutine swilk
+
 !!$      subroutine tricky_case(n, arr)
 !!$        integer, optional, dimension(n), intent(in,out) :: arr = 0.
 !!$        integer, intent(in) :: n = len(arr) - 2
 !!$      end subroutine tricky_case
-        
 
-    end interface 
+
+    end interface
 end python module f2py_comparison_f2py
 
