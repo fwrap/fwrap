@@ -173,5 +173,19 @@ depend effect on array vs. array size::
     True
     >>> raises_error(swilk, np.arange(10, dtype=np.float32), np.zeros(6, dtype=np.float32))
     True
+
+
+Type casting::
+
+    >>> array_given_n(np.zeros(4, dtype=np.int16), 4)
+    array([1, 2, 3, 4], dtype=int32)
+    >>> array_given_n(np.zeros(4, dtype=np.int64), 4)
+    array([1, 2, 3, 4], dtype=int32)
+    >>> array_given_n(np.zeros(4, dtype=np.float32), 4)
+    array([1, 2, 3, 4], dtype=int32)
+    >>> array_given_n(np.zeros(4, dtype=np.complex128), 4)
+    array([1, 2, 3, 4], dtype=int32)
+
+
 """
 

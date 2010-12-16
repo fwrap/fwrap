@@ -1203,7 +1203,7 @@ cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy):
 
 as_fortran_array_f2pystyle_utility_code = u"""
 cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy):
-    cdef int flags = np.NPY_F_CONTIGUOUS
+    cdef int flags = np.NPY_F_CONTIGUOUS | np.NPY_FORCECAST
     if ndim <= 1:
         # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
         flags |= np.NPY_C_CONTIGUOUS
@@ -1253,12 +1253,10 @@ cdef object fw_f2py_shape_coercion(int to_ndim, object to_shape,
             if i < to_ndim:
                 to_shape[i] = d
             else:
-                to_shape[to_ndim - 1] *= d    
+                to_shape[to_ndim - 1] *= d
 """
 
-    
 
-    
 ##     if result.ndim != ndim:
 ##         # TODO: Optimize
 
