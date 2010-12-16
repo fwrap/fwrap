@@ -17,7 +17,7 @@ def test_expressions():
 
     def f(s):
         print s
-        e = CToCython().translate(s)
+        e = c_to_cython(s)
         deps = list(e.requires)
         deps.sort()
         return e.template, ','.join(deps)
