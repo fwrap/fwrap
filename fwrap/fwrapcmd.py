@@ -195,31 +195,47 @@ def mergepyf_cmd(opts):
     # Do the merge of Cython ast
     merged_cython_ast = mergepyf.mergepyf_ast(cython_ast, pyf_cython_ast)
 
-    # Loaded what we need of HEAD to memory, time to branch
-    checkout_or_create_fwrap_branch(cfg)
-    
-    # If we are removing any routines, generate a seperate changeset for that,
-    # based on Fortran sources (with changed configuration/exclusion) only.
-    # This provides a better commit for later merges.
-    if len(excluded_by_pyf) > 0:
-        fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
-                          c_ast=c_ast, cython_ast=cython_ast,
-                          update_self_sha=True)
-        commit_wrapper(cfg,
-                       message='(do not squash) Removed routines not present in %s' % opts.pyf)
+    # Preparations done, time to make git branches and generate wrappers
+    try:
+        pyf_rev = get_last_update_rev(cfg, 'pyf')
+    except RuntimeError, e:
+        print e
+        pyf_rev = None
 
-    # Then, branch again from _fwrap to _fwrap+pyf. We do NOT
-    # update the self-sha1 on this branch, so that the changes
-    # are considered manual when doing a "fwrap update"
-    git.branch(PYF_BRANCH, 'HEAD')
-    git.checkout(PYF_BRANCH)
+    if pyf_rev is None:
+        # First mergepyf done on this file; create branch from original
+        # wrapper generated from Fortran
+        checkout_or_create_fwrap_branch(cfg)
     
+        # If we are removing any routines, generate a seperate changeset for that,
+        # based on Fortran sources (with changed configuration/exclusion) only.
+        # This provides a better commit for later merges.
+        if len(excluded_by_pyf) > 0:
+            fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
+                              c_ast=c_ast, cython_ast=cython_ast,
+                              update_self_sha=True)
+            commit_wrapper(cfg,
+                           message='(do not squash) Removed routines not present in %s' % opts.pyf)
+
+            # Then, branch again from _fwrap to _fwrap+pyf. We do NOT
+            # update the self-sha1 on this branch, so that the changes
+            # are considered manual when doing a "fwrap update"
+            
+        git.branch(PYF_BRANCH, 'HEAD')
+    else:
+        # This is regeneration with newer fwrap, or from changes in pyf
+        # file; just branch from the previous mergepyf
+        git.branch(PYF_BRANCH, pyf_rev)
+
+    git.checkout(PYF_BRANCH)
+
     # Now, we generate the wrapper using the merged cython AST
     # (This regenerates the _fc-files if the if-test above hits;
     # TODO: break this up some, but overhead is negligible)
     fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
                       c_ast=c_ast, cython_ast=merged_cython_ast,
-                      update_self_sha=False)
+                      update_self_sha=False,
+                      update_pyf_sha=True)
     message = opts.message
     if message is None:
         message = 'Ported changes of %s' % opts.pyf
@@ -275,10 +291,17 @@ def checkout_or_create_fwrap_branch(cfg):
         git.branch(BRANCH, blame_rev)
         git.checkout(BRANCH)
 
-def get_last_update_rev(cfg):
+def get_last_update_rev(cfg, which='self'):
     # Find the commit that takes the blame for the self_sha1
-    regex = '%s self-sha1 %s' % (configuration.CFG_LINE_HEAD,
-                                     cfg.self_sha1)
+    if which == 'self':
+        sha1 = cfg.self_sha1
+    elif which == 'pyf':
+        sha1 = cfg.pyf_sha1
+    else:
+        assert False
+    regex = '%s %s-sha1 %s' % (configuration.CFG_LINE_HEAD,
+                               which,
+                               sha1)
     blame_rev = git.blame_for_regex(cfg.get_pyx_filename(), regex)
     return blame_rev
 

@@ -14,6 +14,8 @@ from copy import copy, deepcopy
 # Do not change without taking backwards-compatability into account:
 CFG_LINE_HEAD = "# Fwrap:"
 self_sha1_re = re.compile(r'^%s self-sha1 (.*)$' % CFG_LINE_HEAD, re.MULTILINE)
+pyf_sha1_re = re.compile(r'^%s pyf-sha1 (.*)$' % CFG_LINE_HEAD, re.MULTILINE)
+all_sha1_re = re.compile(r'^%s (pyf|self)-sha1 (.*)$' % CFG_LINE_HEAD, re.MULTILINE)
 
 #
 # Configuration of configuration options
@@ -41,6 +43,7 @@ def parse_bool(value):
 configuration_dom = {
     # nodetype, parser/regex, default-value, child-dom
     'self-sha1' : (ATTR, r'^[0-9a-f]*$', '0' * 40, {}),
+    'pyf-sha1' : (ATTR, r'^[0-9a-f]*$', '0' * 40, {}),
     'version' : (ATTR, r'^[0-9.]+(dev_[0-9a-f]+)?$', None, {}),
     'wraps' : (LIST_ITEM, r'^.+$', None, {
         'sha1' : (ATTR, r'^[0-9a-f]*$', None, {}),
@@ -88,7 +91,8 @@ def _document_from_cmdline_options(options):
 
 class Configuration:
     # In preferred order when serializing:
-    keys = ['version', 'self-sha1', 'wraps', 'exclude', 'f77binding', 'detect-templates',
+    keys = ['version', 'self-sha1', 'pyf-sha1', 'wraps', 'exclude',
+            'f77binding', 'detect-templates',
             'template', 'emulate-f2py', 'auxiliary']
 
     @staticmethod
@@ -212,6 +216,9 @@ class Configuration:
     def update_self_sha1(self, sha1):
         self.document['self-sha1'] = sha1
 
+    def update_pyf_sha1(self, sha1):
+        self.document['pyf-sha1'] = sha1
+
 #
 # Utils
 #
@@ -225,14 +232,13 @@ def expand_source_patterns(filenames):
 
 def get_self_sha1(s):
     """
-    Find a sha1 of the string s, but avoid lines matching the
-    `self_sha1_re` pattern. Newlines are stripped from the sha1
-    etc., only compare with sha1's from this routine...
+    Find a sha1 of the string s, but avoid lines storing the self-sha1
+    and pyf-sha1.
     """
     import hashlib
     h = hashlib.sha1()
     for line in s.split('\n'):
-        if self_sha1_re.match(line) is None:
+        if all_sha1_re.match(line) is None:
             h.update(line)
     return h.hexdigest()
 
@@ -240,10 +246,12 @@ def get_self_sha1_of_pyx(filename):
     with file(filename) as f:
         return get_self_sha1(f.read())
 
-def update_self_sha1_in_string(s, sha=None):
+def update_self_sha1_in_string(s, sha=None, which='self'):
+    assert which in ('self', 'pyf')
     if sha is None:
         sha = get_self_sha1(s)
-    return self_sha1_re.sub('%s self-sha1 %s' % (CFG_LINE_HEAD, sha), s)
+    p = re.compile(r'^%s %s-sha1 (.*)$' % (CFG_LINE_HEAD, which), re.MULTILINE)
+    return p.sub('%s %s-sha1 %s' % (CFG_LINE_HEAD, which, sha), s)
 
 def sha1_of_pattern(pattern):
     import hashlib

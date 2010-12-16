@@ -25,6 +25,12 @@ def keeprepo():
 def ne_(a, b):
     assert a != b, "%r == %r (expected !=)" % (a, b)
 
+def infile_(a, filename):
+    assert a in load(filename), (a, load(filename))
+
+def notinfile_(a, filename):
+    assert a not in load(filename), (a, load(filename))
+
 def dump(filename, contents, commit=False, mode='w'):
     with file(filename, mode) as f:
         f.write(dedent(contents))
@@ -246,7 +252,7 @@ def get_sha():
     return configuration.get_self_sha1(load('test.pyx'))
 
 @with_temprepo
-def test_withpyf():
+def test_mergepyf():
     SIG_WO_PYF = 'sfoo(fwr_real_t x, fwr_real_t y, fwr_real_t z)'
     SIG_WITH_PYF = 'sfoo(fwr_real_t y, fwr_real_t x, fwr_real_t z=0)'
     
@@ -256,8 +262,8 @@ def test_withpyf():
     eq_(git.current_branch(), 'master')
     ok_(SIG_WO_PYF in load('test.pyx'))
     sha_from_create = get_sha()
-    ok_(sha_from_create in load('test.pyx'))
-    ok_('notwrapped()' in load('test.pyx'))
+    infile_('self-sha1 %s' % sha_from_create, 'test.pyx')
+    infile_('notwrapped()', 'test.pyx')
 
     fwrap('mergepyf test.pyx test.pyf')
     eq_(git.current_branch(), 'master')
@@ -265,10 +271,11 @@ def test_withpyf():
                'test.pxd', 'test.pyf', 'test.pyx', 'test_fc.f',
                'test_fc.h', 'test_fc.pxd'])    
     git.merge('_fwrap+pyf')
-    ok_(SIG_WITH_PYF in load('test.pyx'))
-    ok_(get_sha() not in load('test.pyx'))
-    ok_('notwrapped()' not in load('test.pyx'))
-    ok_(sha_from_create not in load('test.pyx'))
+    infile_(SIG_WITH_PYF, 'test.pyx')
+    infile_('pyf-sha1 %s' % get_sha(),  'test.pyx')
+    infile_('self-sha1 %s' % sha_from_create, 'test.pyx')
+    notinfile_('self-sha1 %s' % get_sha(),  'test.pyx')
+    notinfile_('notwrapped()', 'test.pyx')
 
     append('test.f', '''
     C
@@ -285,6 +292,9 @@ def test_withpyf():
     git.execproc_canfail(['git', 'merge', '_fwrap'])
     ok_(SIG_WITH_PYF in load('test.pyx'))
     ok_('newroutine()' in load('test.pyx'))
+    git.execproc(['git', 'reset', '--hard'])
+    git.execproc(['git', 'merge', '-Xtheirs', '_fwrap'])
+    
 
 @with_tempdir
 def test_genktp():

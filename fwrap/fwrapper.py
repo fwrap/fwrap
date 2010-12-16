@@ -82,7 +82,7 @@ def parse(source_files, cfg):
 
 def generate(fort_ast, name, cfg, output_directory=None,
              pyf_to_merge=None, c_ast=None, cython_ast=None,
-             update_self_sha=True):
+             update_self_sha=True, update_pyf_sha=False):
     r"""Given a fortran abstract syntax tree ast, generate wrapper files
 
     :Input:
@@ -120,7 +120,7 @@ def generate(fort_ast, name, cfg, output_directory=None,
                    (generate_fc_h, (c_ast, name, cfg), FC_HDR_TMPL % name),
                    (generate_fc_pxd,(c_ast, name), FC_PXD_TMPL % name),
                    (generate_cy_pxd,(cython_ast, name), CY_PXD_TMPL % name),
-                   (generate_cy_pyx,(cython_ast, name, cfg, update_self_sha),
+                   (generate_cy_pyx,(cython_ast, name, cfg, update_self_sha, update_pyf_sha),
                     (CY_PYX_IN_TMPL if cfg.detect_templates else CY_PYX_TMPL) % name) ]
     if not cfg.f77binding:
         generators.append((generate_type_specs, (c_ast,name), constants.TYPE_SPECS_SRC))
@@ -169,15 +169,19 @@ def generate_cy_pxd(cy_ast, name):
     cy_wrap.generate_cy_pxd(cy_ast, fc_pxd_name, buf)
     return buf
 
-def generate_cy_pyx(cy_ast, name, cfg, update_self_sha):
+def generate_cy_pyx(cy_ast, name, cfg, update_self_sha, update_pyf_sha):
     buf = CodeBuffer()
     cy_wrap.generate_cy_pyx(cy_ast, name, buf, cfg)
     # Add sha1 to file
     s = buf.getvalue()
-    if update_self_sha:
+    if update_self_sha or update_pyf_sha:
         sha1 = configuration.get_self_sha1(s)
-        cfg.update_self_sha1(sha1)
-        s = configuration.update_self_sha1_in_string(s, sha1)
+        if update_self_sha:
+            cfg.update_self_sha1(sha1)
+            s = configuration.update_self_sha1_in_string(s, sha1)
+        if update_pyf_sha:
+            cfg.update_pyf_sha1(sha1)
+            s = configuration.update_self_sha1_in_string(s, sha1, 'pyf')
     return s
 
 def generate_fc_pxd(fc_ast, name):
