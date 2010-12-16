@@ -247,7 +247,7 @@ class CToCython(object):
         variables = prs.Regex(r'[a-zA-Z_][a-zA-Z0-9_]*') + prs.FollowedBy(prs.NotAny('('))
         variables.setParseAction(handle_var)
 
-        var_or_literal = variables | prs.Regex('-?[0-9.]+') | prs.dblQuotedString
+        var_or_literal = variables | prs.Regex('-?[0-9.e\-]+') | prs.dblQuotedString
 
         def handle_ternary(s, loc, tok):
             tok = tok[0]
@@ -305,7 +305,7 @@ class CToCython(object):
 
 
     zero_re = re.compile(r'^[()0.,\s]+$') # variations of zero...
-    literal_re = re.compile(r'^-?[()0-9.,\s]+$') # close enough; also matches e.g. (0, 0.)
+    literal_re = re.compile(r'^-?[()0-9.,\se\-]+$') # close enough; also matches e.g. (0, 0.)
     complex_literal_re = re.compile(r'^\s*\((-?[0-9.,\s]+),(-?[0-9.,\s]+)\)\s*$')
 
     def translate(self, s):

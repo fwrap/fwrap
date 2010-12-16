@@ -15,7 +15,7 @@ from warnings import warn
 
 plain_sizeexpr_re = re.compile(r'\(([a-zA-Z0-9_]+)\)')
 default_array_value_re = re.compile(r'^[()0.,\s]+$') # variations of zero...
-literal_re = re.compile(r'^[0-9.]+$')
+literal_re = re.compile(r'^[0-9.e\-]+$')
 
 class CythonCodeGenerationContext:
     def __init__(self, cfg):
