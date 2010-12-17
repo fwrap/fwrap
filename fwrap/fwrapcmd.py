@@ -158,13 +158,6 @@ def mergepyf_cmd(opts):
         raise RuntimeError('Not tracked by VCS, aborting: %s' % cfg.get_pyx_basename())
     if not git.clean_index_and_workdir():
         raise RuntimeError('VCS state not clean, aborting')
-    try:
-        git.checkout(PYF_BRANCH)
-    except RuntimeError:
-        pass
-    else:
-        git.checkout(start_branch)
-        raise RuntimeError('Branch "%s" already exists, aborting' % PYF_BRANCH)
 
     # pyf-merging is based on primarily wrapping the Fortran files,
     # but incorporate any changes in pyf files (see mergepyf.py).
@@ -205,6 +198,7 @@ def mergepyf_cmd(opts):
     if pyf_rev is None:
         # First mergepyf done on this file; create branch from original
         # wrapper generated from Fortran
+        git.delete_branch(BRANCH)
         checkout_or_create_fwrap_branch(cfg)
     
         # If we are removing any routines, generate a seperate changeset for that,
@@ -217,16 +211,13 @@ def mergepyf_cmd(opts):
             commit_wrapper(cfg,
                            message='(do not squash) Removed routines not present in %s' % opts.pyf)
 
-            # Then, branch again from _fwrap to _fwrap+pyf. We do NOT
-            # update the self-sha1 on this branch, so that the changes
-            # are considered manual when doing a "fwrap update"
-            
-        git.branch(PYF_BRANCH, 'HEAD')
-    else:
-        # This is regeneration with newer fwrap, or from changes in pyf
-        # file; just branch from the previous mergepyf
-        git.branch(PYF_BRANCH, pyf_rev)
-
+        # Then, branch again from _fwrap to _fwrap+pyf. We do NOT
+        # update the self-sha1 on this branch, so that the changes
+        # are considered manual when doing a "fwrap update"
+        pyf_rev = 'HEAD'
+        
+    git.delete_branch(PYF_BRANCH)
+    git.branch(PYF_BRANCH, pyf_rev)
     git.checkout(PYF_BRANCH)
 
     # Now, we generate the wrapper using the merged cython AST

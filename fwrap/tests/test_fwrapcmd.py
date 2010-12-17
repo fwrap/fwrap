@@ -7,12 +7,15 @@ from pprint import pprint
 import tempfile
 import shutil
 import os
+import re
 from textwrap import dedent
 from nose.tools import ok_, eq_, set_trace, assert_raises, with_setup
 
 from fwrap import git
 from fwrap import configuration
 from fwrap.git import checkout, merge
+
+orig_cwd = os.getcwd()
 
 temprepo = None
 reporev = None
@@ -22,6 +25,12 @@ def keeprepo():
     global _keeprepo
     _keeprepo = True
 
+def snapshot(dst):
+    fulldst = os.path.join(orig_cwd, dst)
+    if os.path.exists(fulldst):
+        shutil.rmtree(fulldst)
+    shutil.copytree(temprepo, fulldst)
+
 def ne_(a, b):
     assert a != b, "%r == %r (expected !=)" % (a, b)
 
@@ -30,6 +39,10 @@ def infile_(a, filename):
 
 def notinfile_(a, filename):
     assert a not in load(filename), (a, load(filename))
+
+def regexfile(pattern, filename, flags = 0):
+    buf = load(filename)
+    return re.findall(pattern, buf, re.MULTILINE | flags)
 
 def dump(filename, contents, commit=False, mode='w'):
     with file(filename, mode) as f:
@@ -265,6 +278,7 @@ def test_mergepyf():
     infile_('self-sha1 %s' % sha_from_create, 'test.pyx')
     infile_('notwrapped()', 'test.pyx')
 
+    # Do the mergepyf
     fwrap('mergepyf test.pyx test.pyf')
     eq_(git.current_branch(), 'master')
     eq_(ls(), ['fparser.log', 'test.f',
@@ -276,7 +290,15 @@ def test_mergepyf():
     infile_('self-sha1 %s' % sha_from_create, 'test.pyx')
     notinfile_('self-sha1 %s' % get_sha(),  'test.pyx')
     notinfile_('notwrapped()', 'test.pyx')
+    infile_('exclude notwrapped', 'test.pyx')
 
+    # Do a second mergepyf. Check that we don't double-exclude.
+    fwrap('mergepyf test.pyx test.pyf')
+    git.merge('_fwrap+pyf')
+    eq_(len(regexfile('exclude notwrapped', 'test.pyx')), 1)
+
+
+    # Do an update (changing Fortran sources)
     append('test.f', '''
     C
            subroutine newroutine()
@@ -294,6 +316,8 @@ def test_mergepyf():
     ok_('newroutine()' in load('test.pyx'))
     git.execproc(['git', 'reset', '--hard'])
     git.execproc(['git', 'merge', '-Xtheirs', '_fwrap'])
+
+    
     
 
 @with_tempdir

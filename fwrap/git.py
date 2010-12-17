@@ -110,3 +110,14 @@ def blame_for_regex(filename, regex):
 
 def merge(branch):
     execproc(['git', 'merge', branch])
+
+def delete_branch(branch):
+    orig_branch = current_branch()
+    try:
+        checkout(branch)
+    except RuntimeError:
+        return
+    else:
+        checkout(orig_branch)
+        execproc(['git', 'branch', '-D', branch])
+
