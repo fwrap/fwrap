@@ -205,7 +205,8 @@ class Configuration:
         routines = list(routines)
         routines.sort()
         self.exclude.extend([(routine, {})
-                             for routine in routines])
+                             for routine in routines
+                             if self.is_routine_included(routine)])
 
     def get_templates(self):
         return [x.split(',') for x, attr in self.template]
