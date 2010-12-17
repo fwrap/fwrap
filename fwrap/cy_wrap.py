@@ -147,8 +147,8 @@ def generate_cy_pyx(ast, name, buf, cfg):
 
 def put_cymod_docstring(ast, modname, buf):
     dstring = get_cymod_docstring(ast, modname)
-    buf.putln('"""')
-    buf.putlines(dstring)
+    buf.putln('"""' + dstring[0])
+    buf.putlines(dstring[1:])
     buf.putempty()
     buf.putln('"""')
 
@@ -1078,8 +1078,8 @@ class CyProcedure(AstNode):
 
     def put_docstring(self, buf):
         dstring = self.docstring()
-        buf.putln('"""')
-        buf.putlines(dstring)
+        buf.putln('"""' + dstring[0])
+        buf.putlines(dstring[1:])
         buf.putempty()
         buf.putln('"""')
 

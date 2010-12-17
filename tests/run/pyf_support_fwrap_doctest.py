@@ -6,7 +6,7 @@ from pyf_support_fwrap import *
 #
 
 
-__doc__ = u"""
+__doc__ = ur"""
     >>> m, n = 2, 4
     >>> testone(m, n)
     array([[  0.,   1.,   2.,   3.],
@@ -89,6 +89,11 @@ Test offx argument::
     >>> fort_sum(r, offx=9)
     9.0
 
+docstring::
+
+    >>> fort_sum.__doc__.split('\n')[0]
+    'fort_sum(arr[, n, offx]) -> fw_ret_arg'
+  
 intent(copy) and intent(overwrite) tests::
 
     >>> r = np.zeros(10)
