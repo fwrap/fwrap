@@ -222,7 +222,7 @@ class _CyArgBase(AstNode):
         return result
 
     def is_optional(self):
-        return self.pyf_default_value is not None
+        return (self.cy_default_value is not None or self.pyf_default_value is not None)
 
     def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
         yield CodeSnippet(('init', self.intern_name))
@@ -863,8 +863,22 @@ class CyArgManager(object):
     def arg_declarations(self):
         decls = []
         for arg in self.in_args:
-            decls.extend(arg.extern_declarations())
+            x = arg.extern_declarations()
+            assert len(x) == 1, "assumed in arg_is_optional"
+            decls.extend(x)
         return decls
+
+    def arg_is_optional(self):
+        is_optional = []
+        for arg in self.in_args:
+            is_optional.append(arg.is_optional())
+        # Remove non-trailing optional arguments
+        for i in range(len(is_optional) - 1, -1, -1):
+            if not is_optional[i]:
+                for j in range(i):
+                    is_optional[j] = False
+                break
+        return is_optional
 
     def intern_declarations(self, ctx):
         decls = []
@@ -941,20 +955,13 @@ class CyProcedure(AstNode):
         # trailing arguments that have defaults (explicit-shape,
         # intent(out) arrays)
         arg_decls = self.arg_mgr.arg_declarations()
-        if len(arg_decls) > 0:
-            types_and_names, defaults = zip(*arg_decls)
-            types_and_names = list(types_and_names)
-            for i in range(len(defaults) - 1, -1, -1):
-                d = defaults[i]
-                if d is None:
-                    break
-                types_and_names[i] = '%s=%s' % (types_and_names[i],
-                                                d if not in_pxd else '*')
-            arg_list = ', '.join(types_and_names)
-        else:
-            arg_list = ''
+        arg_optional_flags = self.arg_mgr.arg_is_optional()
+        decls_with_defaults = ['%s=%s' % (decl, (default if not in_pxd else '*'))
+                               if is_opt else decl
+                               for (decl, default), is_opt in zip(arg_decls, arg_optional_flags)]
+        arg_list = ', '.join(decls_with_defaults)
         sdict = dict(proc_name=self.cy_name,
-                arg_list=arg_list)
+                     arg_list=arg_list)
         return template % sdict
 
     def proc_declaration(self):
@@ -1077,18 +1084,15 @@ class CyProcedure(AstNode):
         buf.putln('"""')
 
     def dstring_signature(self):
-        mandatory = []
-        optional = []
-        for arg in self.in_args:
-            strs = arg.docstring_extern_arg_list()
-            if arg.is_optional():
-                optional.extend(strs)
-            else:
-                mandatory.extend(strs)
-        in_args = ", ".join(mandatory)
+        for idx, is_opt in enumerate(self.arg_mgr.arg_is_optional()):
+            if not is_opt:
+                break
+        mandatory = self.in_args[:idx + 1]
+        optional = self.in_args[idx + 1:]
+        in_arg_str = ", ".join([x.cy_name for x in mandatory])
         if len(optional) > 0:
-            in_args = "%s, [%s]" % (in_args, ", ".join(optional))
-        dstring = "%s(%s)" % (self.cy_name, in_args)
+            in_arg_str += "[, %s]" % ", ".join([x.cy_name for x in optional])
+        dstring = "%s(%s)" % (self.cy_name, in_arg_str)
         doc_ret_vars = self.arg_mgr.docstring_return_tuple_list()
         out_args = ", ".join(doc_ret_vars)
         if len(doc_ret_vars) > 1:
