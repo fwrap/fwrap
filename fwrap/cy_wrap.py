@@ -1084,6 +1084,7 @@ class CyProcedure(AstNode):
         buf.putln('"""')
 
     def dstring_signature(self):
+        idx = 0
         for idx, is_opt in enumerate(self.arg_mgr.arg_is_optional()):
             if not is_opt:
                 break
