@@ -1085,11 +1085,12 @@ class CyProcedure(AstNode):
 
     def dstring_signature(self):
         idx = 0
-        for idx, is_opt in enumerate(self.arg_mgr.arg_is_optional()):
-            if not is_opt:
-                break
-        mandatory = self.in_args[:idx + 1]
-        optional = self.in_args[idx + 1:]
+        try:
+            idx = list(self.arg_mgr.arg_is_optional()).index(True)
+        except ValueError:
+            idx = None
+        mandatory = self.in_args[:idx]
+        optional = self.in_args[idx:]
         in_arg_str = ", ".join([x.cy_name for x in mandatory])
         if len(optional) > 0:
             in_arg_str += "[, %s]" % ", ".join([x.cy_name for x in optional])
