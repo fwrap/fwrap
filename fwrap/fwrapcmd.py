@@ -13,6 +13,7 @@ from glob import glob
 import tempfile
 import shutil
 import re
+import cPickle
 from warnings import warn
 from textwrap import dedent
 from fwrap import fwrapper
@@ -164,7 +165,16 @@ def mergepyf_cmd(opts):
     
     # Load Fortran AST from Fortran and pyf sources
     f_source_files = cfg.get_source_files()
-    f_ast = fwrapper.parse(f_source_files, cfg)
+    if opts.load_f_ast:
+        with file(opts.load_f_ast) as f:
+            f_ast = cPickle.load(f)
+    else:
+        f_ast = fwrapper.parse(f_source_files, cfg)
+
+    if opts.store_f_ast:
+        with file(opts.store_f_ast, 'w') as f:
+            cPickle.dump(f_ast, f, protocol=2)
+
     pyf_f_ast = fwrapper.parse([opts.pyf], cfg)
 
     # Find routine names present in Fortran files that are not
@@ -366,6 +376,10 @@ def no_project_response(opts):
 def create_argument_parser():
     parser = argparse.ArgumentParser(prog='fwrap',
                                      description='fwrap command line tool')
+
+    parser.add_argument('--store-f-ast')
+    parser.add_argument('--load-f-ast')
+    
     subparsers = parser.add_subparsers(title='commands')
 
     #
