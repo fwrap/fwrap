@@ -105,12 +105,12 @@ def get_out_args(args):
 def get_aux_args(args):
     return [arg for arg in args if arg.pyf_hide]
 
-def generate_cy_pxd(ast, fc_pxd_name, buf):
+def generate_cy_pxd(ast, fc_pxd_name, buf, cfg):
     buf.putln('cimport numpy as np')
     buf.putln("from %s cimport *" % fc_pxd_name)
     buf.putln('')
     for proc in ast:
-        proto = proc.cy_prototype()
+        proto = proc.cy_prototype(cfg)
         if proto is not None:
             buf.putln(proto)
 
@@ -961,7 +961,7 @@ class CyProcedure(AstNode):
     def all_dtypes(self):
         return self.all_dtypes_list # TODO: Generate this instead
 
-    def cy_prototype(self, in_pxd=True):
+    def cy_prototype(self, cfg, in_pxd=True):
         if self.pyf_wraps_c and in_pxd:
             return None
 
@@ -985,8 +985,8 @@ class CyProcedure(AstNode):
                      arg_list=arg_list)
         return template % sdict
 
-    def proc_declaration(self):
-        return "%s:" % self.cy_prototype(in_pxd=False)
+    def proc_declaration(self, ctx):
+        return "%s:" % self.cy_prototype(ctx.cfg, in_pxd=False)
 
     def proc_call(self, ctx):
         proc_call = "%(call_name)s(%(call_arg_list)s)" % {
@@ -1064,7 +1064,7 @@ class CyProcedure(AstNode):
             yield cs
 
     def generate_wrapper(self, ctx, buf):
-        buf.putln(self.proc_declaration())
+        buf.putln(self.proc_declaration(ctx))
         buf.indent()
         self.put_docstring(buf)
         self.temp_declarations(buf, ctx)
