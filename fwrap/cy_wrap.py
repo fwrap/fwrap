@@ -1172,7 +1172,8 @@ class CythonExpression(object):
         if self is other: return True
         return (type(self) == type(other) and
                 self.template == other.template and
-                self.requires == other.requires)
+                self.requires == other.requires and
+                self.doc == other.doc)
 
     def __ne__(self, other):
         return not self == other

@@ -185,7 +185,7 @@ def merge_node_attributes(nodes, template_mgr,
             attrs[attrname] = values[0]
         else:
             if not all(isinstance(value, str) for value in values):
-                raise ValueError('Cannot merge non-string attribute: %s' % attrname)
+                raise UnableToMergeError('Cannot merge non-string attribute: %s' % attrname)
             code = template_mgr.get_code_for_values(values, attrname)
             attrs[attrname] = code
     return attrs
