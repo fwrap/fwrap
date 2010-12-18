@@ -263,7 +263,7 @@ class CToCython(object):
         variables = prs.Regex(r'[a-zA-Z_][a-zA-Z0-9_]*') + prs.FollowedBy(prs.NotAny('('))
         variables.setParseAction(handle_var)
 
-        var_or_literal = variables | prs.Regex('-?[0-9.e\-]+') | prs.dblQuotedString
+        var_or_literal = variables | prs.Regex('-?[0-9.e\-]+') | prs.quotedString
 
         def handle_ternary(s, loc, tok):
             tok = tok[0]
@@ -287,6 +287,7 @@ class CToCython(object):
 
         def handle_func(s, loc, tok):
             func, args = tok[0], tok[1:]
+            func = func.lower()
             if func == 'len':
                 if doc:
                     return '%s.shape[0]' % args[0]
@@ -297,12 +298,14 @@ class CToCython(object):
                     return '%s.shape[%s]' % (args[0], args[1])
                 else:
                     return 'np.PyArray_DIMS(%s)[%s]' % (args[0], args[1])
-            elif func in ('abs',):
+            elif func in ('abs', 'min', 'max'):
                 return '%s(%s)' % (func, ', '.join(args))
-
+            else:
+                raise prs.ParseException("Unkown function")
+            
         expr = prs.Forward()
 
-        func_call = (prs.oneOf('len shape abs') + prs.Suppress('(') + expr +
+        func_call = (prs.Word(prs.alphas) + prs.Suppress('(') + expr +
                      prs.ZeroOrMore(prs.Suppress(',') + expr) + prs.Suppress(')'))
         func_call.setParseAction(handle_func)
         cast = prs.Suppress('(') + prs.oneOf('int float') + prs.Suppress(')')
