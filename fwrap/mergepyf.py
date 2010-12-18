@@ -33,6 +33,22 @@ def mergepyf_ast(cython_ast, cython_ast_from_pyf):
             result.append(proc.copy())
     return result
 
+_callstatement_re = re.compile(r'^[\s{]*(.*)\(\*f2py_func\)\s*\(([^;]*)\)[\s;]*(.*?)[;}\s]*$')
+
+def parse_callstatement(s):
+    m = _callstatement_re.match(s)
+    if m is None:
+        raise CouldNotMergeError('Unable to parse callstatement! Have a look at '
+                                 'callstatement_re:' + s)
+    pre_call_code = m.group(1)
+    post_call_code = m.group(3)
+    arg_exprs = m.group(2)
+    if pre_call_code == '':
+        pre_call_code = None
+    if post_call_code == '':
+        post_call_code = None
+    return pre_call_code, post_call_code, arg_exprs
+
 def mergepyf_proc(f_proc, pyf_proc):
     #merge_comments = []
     # There are three argument lists to merge:
@@ -52,16 +68,15 @@ def mergepyf_proc(f_proc, pyf_proc):
             raise CouldNotMergeError('pyf and f description of function is different')
         # TODO: Verify that types match as well
         call_args = [arg.copy() for arg in pyf_proc.call_args]
+        pre_call_code = post_call_code = None
     else:
         # Do NOT trust the name or order in pyf_proc.call_args,
         # but match arguments by their position in the callstatement
         pyf_args = pyf_proc.call_args + pyf_proc.aux_args
         call_args = []
-        m = callstatement_re.match(callstat)
-        if m is None:
-            raise CouldNotMergeError('Unable to parse callstatement! Have a look at '
-                                     'callstatement_re:' + callstat)
-        arg_exprs = m.group(1).split(',')
+
+        pre_call_code, post_call_code, arg_exprs = parse_callstatement(callstat)
+        arg_exprs = arg_exprs.split(',')
 
         # Strip off error arguments (but leave return value)
         assert f_proc.call_args[-2].name == constants.ERR_NAME
@@ -153,10 +168,11 @@ def mergepyf_proc(f_proc, pyf_proc):
                                  out_args=out_args,
                                  aux_args=aux_args,
                                  checks=checks,
-                                 language='pyf')
+                                 language='pyf',
+                                 pyf_pre_call_code=pre_call_code,
+                                 pyf_post_call_code=post_call_code)
     return result
 
-callstatement_re = re.compile(r'^.*\(\*f2py_func\)\s*\((.*)\).*$')
 callstatement_arg_re = re.compile(r'^\s*(&)?\s*([a-zA-Z0-9_]+)(\s*\+\s*([a-zA-Z0-9_]+))?\s*$')
 nested_ternary_re = re.compile(r'^\(?(\s*\(\) .*)\?(.*):(.*)\)?$')
 

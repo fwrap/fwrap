@@ -229,7 +229,6 @@ class _CyArgBase(AstNode):
 
 class _CyArg(_CyArgBase):
 
-
     # Internal:
     is_array = False
 
@@ -936,6 +935,8 @@ class CyProcedure(AstNode):
     language = 'fortran'
     aux_args = ()
     checks = ()
+    pyf_pre_call_code = None
+    pyf_post_call_code = None
 
     def _update(self):
         self.arg_mgr = CyArgManager(self.in_args, self.out_args, self.call_args,
@@ -991,10 +992,14 @@ class CyProcedure(AstNode):
     def pre_call_code(self, ctx, buf):
         for line in self.arg_mgr.pre_call_code(ctx):
             buf.putln(line)
+        if self.pyf_pre_call_code is not None:
+            buf.putln('#TODO: %s' % self.pyf_pre_call_code)
 
     def post_call_code(self, ctx, buf):
         for line in self.arg_mgr.post_call_code(ctx):
             buf.putln(line)
+        if self.pyf_post_call_code is not None:
+            buf.putln('#TODO: %s' % self.pyf_post_call_code)
 
     def check_error(self, buf):
         ck_err = ('if fw_iserr__ != FW_NO_ERR__:\n'
