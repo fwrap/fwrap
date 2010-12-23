@@ -11,7 +11,7 @@ C configure-flags: --f77binding --f2py-comparison
       enddo
       end subroutine
 
-      subroutine out_arr(n, m, x)
+      subroutine out_arr(x, n, m)
       integer x(n, m)
       integer n, m, i, j
       do j = 1, m

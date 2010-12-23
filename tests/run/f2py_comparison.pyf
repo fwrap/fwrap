@@ -7,10 +7,12 @@ python module f2py_comparison_f2py
       integer optional,check(shape(x,1)==m),depend(x) :: m=shape(x,1)
       end subroutine
 
-      subroutine out_arr(n, m, xout)
+      subroutine out_arr(xout, n, m)
+      ! Check that xout is moved after m in argument list; it
+      ! is not present in f2py
       integer, dimension(n, m), intent(out) :: xout
       integer intent(in) :: n
-      integer intent(in) :: m
+      integer optional, intent(in) :: m = 3
       end subroutine
 
       subroutine nodeps(arr, n)
