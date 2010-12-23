@@ -998,8 +998,6 @@ class CyProcedure(AstNode):
     def post_call_code(self, ctx, buf):
         for line in self.arg_mgr.post_call_code(ctx):
             buf.putln(line)
-        if self.pyf_post_call_code is not None:
-            buf.putln('#TODO: %s' % self.pyf_post_call_code)
 
     def check_error(self, buf):
         ck_err = ('if fw_iserr__ != FW_NO_ERR__:\n'
@@ -1028,6 +1026,9 @@ class CyProcedure(AstNode):
 
         if use_try:
             buf.dedent()
+
+        if self.pyf_post_call_code is not None:
+            buf.putln('#TODO: %s' % self.pyf_post_call_code)
 
 
     def get_checks_code(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
