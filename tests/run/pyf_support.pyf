@@ -82,6 +82,14 @@ python module pyf_support
           intent(hide) :: y
           integer :: n
         end subroutine temparray
+
+        subroutine alignment(n, a, b, c)
+          integer :: n
+          integer*4, dimension(n), intent(in,out,overwrite) :: a, b, c
+          intent(aligned8) :: b
+          intent(aligned16) :: c
+        end subroutine alignment
+
     end interface 
 end python module pyf_support
 

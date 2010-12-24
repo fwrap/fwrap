@@ -512,6 +512,7 @@ class Argument(AstNode):
     pyf_overwrite_flag = False
     pyf_overwrite_flag_default = None
     pyf_optional = False
+    pyf_align = None
 
     def _update(self):
         self._var = Var(name=self.name, dtype=self.dtype,

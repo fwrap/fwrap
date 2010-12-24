@@ -1,10 +1,16 @@
 from pyf_support_fwrap import *
+import numpy as np
 
 #
 # Check that the 4 arguments (see pyf_support.f)
 # are turned into 2
 #
 
+
+def aligned_zeros(align, size, dtype):
+    a = np.zeros(((size + align) * dtype().itemsize), dtype=np.uint8)
+    z = np.frombuffer(a.data, offset=align, count=size, dtype=dtype)
+    return z
 
 __doc__ = ur"""
     >>> m, n = 2, 4
@@ -166,6 +172,23 @@ Temporary array:
     >>> temparray(3, np.ones((3,), dtype=np.int32))
     array([2, 2, 2], dtype=int32)
     
+
+alignment:
+
+    >>> n = 3
+    >>> def align_test(align):
+    ...     a, b, c = [aligned_zeros(align, n, np.int32) for x in range(3)]
+    ...     ap, bp, cp = alignment(n, a, b, c)
+    ...     return a is ap, b is bp, c is cp
+    ...
+    >>> align_test(16)
+    (True, True, True)
+    >>> align_test(24)
+    (True, True, False)
+    >>> align_test(8)
+    (True, True, False)
+    >>> align_test(5)
+    (True, False, False)
 
 """
 

@@ -126,4 +126,7 @@ C     Then do arr = arange(m*n).reshape(m, n)
       enddo
       end subroutine
       
-      
+      subroutine alignment(n, a, b, c)
+      integer n
+      integer*4 a(n), b(n), c(n)
+      end subroutine alignment

@@ -196,6 +196,7 @@ class _CyArgBase(AstNode):
     pyf_overwrite_flag = False
     pyf_overwrite_flag_default = None
     pyf_optional = False
+    pyf_align = None
     
     cy_default_value = None # or CythonExpression
 
@@ -636,7 +637,8 @@ class _CyArrayArg(_CyArgBase):
         d = {'intern' : self.intern_name,
              'extern' : self.cy_name,
              'dtenum' : self.npy_enum,
-             'ndim' : self.ndims}
+             'ndim' : self.ndims,
+             'alignstr' : '' if self.pyf_align is None else ', %d' % self.pyf_align}
         # Can we allocate the out-array ourselves? Currently this
         # involves trying to parse the size expression to see if it
         # is simple enough.
@@ -693,10 +695,10 @@ class _CyArrayArg(_CyArgBase):
                 d['from'] = self.cy_name
             ctx.use_utility_code(explicit_shape_array_utility_code)
             cs.putln('%(intern)s, %(extern)s = fw_explicitshapearray(%(from)s, %(dtenum)s, '
-                     '%(ndim)d, [%(shape)s], %(copy)s)' % d)
+                     '%(ndim)d, [%(shape)s], %(copy)s%(alignstr)s)' % d)
         else:
             cs.putln('%(intern)s, %(extern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '
-                     '%(ndim)d, %(copy)s)' % d)
+                     '%(ndim)d, %(copy)s%(alignstr)s)' % d)
 
         #
         # May need to copy shape into new array as well
@@ -1194,20 +1196,25 @@ cdef void fw_copyshape(fw_shape_t *target, np.intp_t *source, int ndim):
 
 explicit_shape_array_utility_code = u"""
 cdef object fw_explicitshapearray(object value, int typenum, int ndim,
-                                  np.intp_t *shape, bint copy):
+                                  np.intp_t *shape, bint copy, int alignment=1):
     if value is None:
         result = np.PyArray_ZEROS(ndim, shape, typenum, 1)
-        return result, result
+        return result, result 
     else:
-        return fw_asfortranarray(value, typenum, ndim, copy)
+        return fw_asfortranarray(value, typenum, ndim, copy, alignment)
 """
 
 as_fortran_array_utility_code = u"""
-cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy):
+cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy,
+                              int alignment=1):
     cdef int flags = np.NPY_F_CONTIGUOUS
     if ndim <= 1:
         # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
         flags |= np.NPY_C_CONTIGUOUS
+    if (not copy and alignment > 1 and np.PyArray_Check(value) and
+        (<Py_ssize_t>np.PyArray_DATA(value) & (alignment - 1) != 0)):
+        # mis-aligned array
+        copy = True    
     if copy:
         flags |= np.NPY_ENSURECOPY
     result = np.PyArray_FROMANY(value, typenum, ndim, ndim, flags)
@@ -1215,11 +1222,16 @@ cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy):
 """
 
 as_fortran_array_f2pystyle_utility_code = u"""
-cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy):
+cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy,
+                              int alignment=1):
     cdef int flags = np.NPY_F_CONTIGUOUS | np.NPY_FORCECAST
     if ndim <= 1:
         # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
         flags |= np.NPY_C_CONTIGUOUS
+    if (not copy and alignment > 1 and np.PyArray_Check(value) and
+        (<Py_ssize_t>np.PyArray_DATA(value) & (alignment - 1) != 0)):
+        # mis-aligned array
+        copy = True
     if copy:
         flags |= np.NPY_ENSURECOPY
     result = np.PyArray_FROMANY(value, typenum, 0, 0, flags)

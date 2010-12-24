@@ -179,6 +179,15 @@ def _get_pyf_annotations(arg):
         overwrite_flag = False
         overwrite_flag_default = None
 
+    align = None
+    if arg.intent is not None:
+        if 'ALIGNED4' in arg.intent:
+            align = 4
+        elif 'ALIGNED8' in arg.intent:
+            align = 8
+        elif 'ALIGNED16' in arg.intent:
+            align = 16
+        
     annotations = dict(pyf_hide=hide,
                        pyf_default_value=arg.init,
                        pyf_check=arg.check,
@@ -188,6 +197,7 @@ def _get_pyf_annotations(arg):
                        # compared to in F90 files, so we use a seperate flag
                        pyf_optional=arg.is_optional(),
                        pyf_depend=arg.depend,
+                       pyf_align=align,
                        )
 
     return intent, annotations
