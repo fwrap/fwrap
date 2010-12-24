@@ -79,6 +79,18 @@ def check_ok_to_write(opts):
                                'wrapper anyway')
     return use_git
 
+def parse_fortran_files(opts, cfg):
+    if opts.load_f_ast:
+        with file(opts.load_f_ast) as f:
+            f_ast = cPickle.load(f)
+    else:
+        f_source_files = cfg.get_source_files()
+        f_ast = fwrapper.parse(f_source_files, cfg)
+    if opts.store_f_ast:
+        with file(opts.store_f_ast, 'w') as f:
+            cPickle.dump(f_ast, f, protocol=2)
+    return f_ast
+
 def create_cmd(opts):
     use_git = check_ok_to_write(opts)
     check_in_directory_of(opts.wrapper_pyx)    
@@ -110,8 +122,8 @@ def update_cmd(opts):
     wanted_checksum = cfg.self_sha1
 
     # Load Fortran AST into memory from Fortran sources before switching branch
-    f_source_files = cfg.get_source_files()
-    f_ast = fwrapper.parse(f_source_files, cfg)
+
+    f_ast = parse_fortran_files(opts, cfg)
 
     start_branch = git.current_branch()
     checkout_or_create_fwrap_branch(cfg)
@@ -164,16 +176,7 @@ def mergepyf_cmd(opts):
     # but incorporate any changes in pyf files (see mergepyf.py).
     
     # Load Fortran AST from Fortran and pyf sources
-    f_source_files = cfg.get_source_files()
-    if opts.load_f_ast:
-        with file(opts.load_f_ast) as f:
-            f_ast = cPickle.load(f)
-    else:
-        f_ast = fwrapper.parse(f_source_files, cfg)
-
-    if opts.store_f_ast:
-        with file(opts.store_f_ast, 'w') as f:
-            cPickle.dump(f_ast, f, protocol=2)
+    f_ast = parse_fortran_files(opts, cfg)
 
     pyf_f_ast = fwrapper.parse([opts.pyf], cfg)
 
