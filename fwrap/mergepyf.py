@@ -226,13 +226,12 @@ def process_in_args(in_args):
     optional = [arg for arg in in_args
                 if arg.is_optional() and arg.intent != 'out']
     out_args = [arg for arg in in_args if arg.intent == 'out']
-    in_args = mandatory + optional + out_args
     
     # Process intent(copy) and intent(overwrite). f2py behaviour is to
     # add overwrite_X to the very end of the argument list, so insert
     # new argument nodes.
     overwrite_args = []
-    for arg in in_args:
+    for arg in mandatory + optional:
         if arg.pyf_overwrite_flag:
             flagname = 'overwrite_%s' % arg.cy_name
             arg.overwrite_flag_cy_name = flagname
@@ -244,9 +243,9 @@ def process_in_args(in_args):
                        dtype=None,
                        cy_default_value=CythonExpression(
                            repr(arg.pyf_overwrite_flag_default), ())))
-    in_args.extend(overwrite_args)
 
     # Return new set of in_args
+    in_args = mandatory + optional + overwrite_args + out_args
     return in_args
 
 

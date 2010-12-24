@@ -92,12 +92,27 @@ Require flattening of dimension; (2,2,2) treated as (2,2,4)::
     >>> raises_error(func, b, 4, 2)
     True
 
-Out arrays::
+Out arrays and argument positions::
 
     >>> out_arr(2, 3)
     array([[1, 2, 3],
            [4, 5, 6]], dtype=int32)
-
+           
+    >>> out_and_overwrite(np.zeros((2,3)), 2, 3)[0]
+    array([[1, 2, 3],
+           [4, 5, 6]], dtype=int32)
+    >>> out_and_overwrite(np.zeros((2,3)), 2, 3)[1]
+    array([[1, 2, 3],
+           [7, 8, 9]], dtype=int32)
+    >>> arr = np.zeros((2,3), dtype=np.int32, order='F')
+    >>> _ = out_and_overwrite(arr, 2, 3, False)
+    >>> arr
+    array([[0, 0, 0],
+           [0, 0, 0]], dtype=int32)
+    >>> _ = out_and_overwrite(arr, 2, 3, True)
+    >>> arr
+    array([[1, 2, 3],
+           [4, 5, 6]], dtype=int32)
 
 depend effect on array vs. array size::
 

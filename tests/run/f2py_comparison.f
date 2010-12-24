@@ -21,6 +21,18 @@ C configure-flags: --f77binding --f2py-comparison
       enddo
       end subroutine
 
+      subroutine out_and_overwrite(xinout, xout, n, m)
+      integer xout(n, m)
+      integer xinout(n, m)
+      integer n, m, i, j
+      do j = 1, m
+         do i = 1, n
+            xout(i, j) = 2 * (i-1) * m + j
+            xinout(i, j) = (i-1) * m + j
+         enddo
+      enddo
+      end subroutine
+
       subroutine nodeps(arr, n)
       integer arr(n)
       integer n, i
