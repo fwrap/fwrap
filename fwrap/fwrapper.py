@@ -62,7 +62,9 @@ def wrap(sources, name, cfg, output_directory=None, pyf_to_merge=None):
     # Generate wrapper files
     created_files = generate(f_ast, name, cfg, output_directory,
                              pyf_to_merge=pyf_to_merge,
-                             update_self_sha=True)
+                             update_self_sha=True,
+                             only_pyf=(len(source_files) == 1 and
+                                       source_files[0].endswith('.pyf')))
     return created_files
     
 
@@ -82,7 +84,8 @@ def parse(source_files, cfg):
 
 def generate(fort_ast, name, cfg, output_directory=None,
              pyf_to_merge=None, c_ast=None, cython_ast=None,
-             update_self_sha=True, update_pyf_sha=False):
+             update_self_sha=True, update_pyf_sha=False,
+             only_pyf=False):
     r"""Given a fortran abstract syntax tree ast, generate wrapper files
 
     :Input:
@@ -112,7 +115,9 @@ def generate(fort_ast, name, cfg, output_directory=None,
         pyf_ast = cy_wrap.wrap_fc(pyf_ast)
         import mergepyf
         cython_ast = mergepyf.mergepyf_ast(cython_ast, pyf_ast)
-        
+    elif only_pyf:
+        import mergepyf
+        mergepyf.create_from_pyf_postprocess(cython_ast)
 
     # Generate files and write them out
     generators = [ (generate_fc_f, (c_ast, name, cfg),

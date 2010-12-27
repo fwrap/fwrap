@@ -15,7 +15,32 @@ prs.ParserElement.enablePackrat()
 class CouldNotMergeError(Exception):
     pass
 
+
+def translate_default_value(arg, func_name):
+    if arg.pyf_default_value is not None:
+        defval = arg.pyf_default_value
+        cy_default_value = c_to_cython_warn(defval, func_name)
+        defer = not cy_default_value.is_literal()
+        arg.update(cy_default_value=cy_default_value,
+                   pyf_default_value=None,
+                   defer_init_to_body=defer)
+    
+
+def create_from_pyf_postprocess(cython_ast):
+    # Called on "fwrap create" command if source is a pyf file.  Does
+    # a smaller subset of the parsing that mergepyf_ast does (in
+    # particular, reordering of arguments due to callstatement's are
+    # not supported, since we don't have access to underlying C or
+    # Fortran source).
+    #
+    # Tree is processed in-place.
+    #
+    for proc in cython_ast:
+        for arg in proc.in_args + proc.aux_args:
+            translate_default_value(arg, proc.name)
+            
 def mergepyf_ast(cython_ast, cython_ast_from_pyf):
+    # Called on "fwrap mergepyf" command
     # Primarily just copy ast, but merge in select detected manual
     # modifications to the pyf file present in pyf_ast
 
@@ -29,7 +54,7 @@ def mergepyf_ast(cython_ast, cython_ast_from_pyf):
             result.append(mergepyf_proc(proc, pyf_proc))
         except CouldNotMergeError, e:
             warn('Could not import procedure "%s" from .pyf, '
-                 'please modify manually' % proc.name)
+                 'please modify manually: %s' % (proc.name, e))
             result.append(proc.copy())
     return result
 
@@ -154,14 +179,8 @@ def mergepyf_proc(f_proc, pyf_proc):
             last_dim_deps = arg.dimension.dims[-1].depnames
             if len(last_dim_deps.intersection(arg.pyf_depend)) > 0:
                 arg.update(truncation_allowed=False)
-
-        if arg.pyf_default_value is not None:
-            defval = arg.pyf_default_value
-            cy_default_value = c_to_cython_warn(defval, func_name)
-            defer = not cy_default_value.is_literal()
-            arg.update(cy_default_value=cy_default_value,
-                       pyf_default_value=None,
-                       defer_init_to_body=defer)
+                
+        translate_default_value(arg, func_name)
 
     result = f_proc.copy_and_set(call_args=call_args,
                                  in_args=in_args,

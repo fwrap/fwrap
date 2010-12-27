@@ -317,8 +317,28 @@ def test_mergepyf():
     git.execproc(['git', 'reset', '--hard'])
     git.execproc(['git', 'merge', '-Xtheirs', '_fwrap'])
 
-    
-    
+@with_tempdir
+def test_wrapcfile():
+    # Wrap a C file using a pyf file,
+    # using "fwrap create test.pyx test.pyf"
+
+    dump('test.c', '''
+    void func(int * a, int * b, int * sum) {
+        *sum = *a + *b;
+    }
+    ''')
+
+    dump('test.pyf', '''
+    subroutine func(a, b, sum)
+        intent(c) func
+        integer, intent(in) :: a
+        integer, intent(in) :: b = 1
+        integer, intent(out) :: sum
+    end subroutine func
+    ''')
+
+    fwrap('create --f77binding test.pyx test.pyf')
+    snapshot('1')
 
 @with_tempdir
 def test_genktp():
