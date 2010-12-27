@@ -38,13 +38,13 @@ def _process_node(node, ast, language):
         else:
             args = _get_args(child, language)
             params = _get_params(child, language)
-            callstatement = _get_callstatement(child, language)
             kw = dict(
                 name=child.name,
                 args=args,
                 params=params,
-                language=language,
-                pyf_callstatement=callstatement)
+                language=language)
+            if language == 'pyf':
+                kw.update(_get_pyf_proc_annotations(child))
             if child.blocktype == 'subroutine':
                 ast.append(pyf.Subroutine(**kw))
             elif child.blocktype == 'function':
@@ -87,7 +87,7 @@ def _get_arg(p_arg, language):
     dtype = _get_dtype(p_typedecl, language)
     name = p_arg.name
     if language == 'pyf':
-        intent, pyf_annotations = _get_pyf_annotations(p_arg)
+        intent, pyf_annotations = _get_pyf_arg_annotations(p_arg)
     else:
         intent = _get_intent(p_arg, language)
         pyf_annotations = {}
@@ -146,7 +146,16 @@ def _get_intent(arg, language):
                     "intents specified, '%s', %s" % (arg, intents))
     return intents[0]
 
-def _get_pyf_annotations(arg):
+def _get_pyf_proc_annotations(proc):
+    from fparser.statements import Intent
+    pyf_wraps_c = False
+    for obj in proc.content:
+        if isinstance(obj, Intent) and 'C' in obj.specs:
+            pyf_wraps_c = True
+            break
+    return dict(pyf_wraps_c=pyf_wraps_c)
+
+def _get_pyf_arg_annotations(arg):
     # Parse Fwrap-compatible intents
     if arg.is_intent_inout():
         # The "inout" feature of f2py is different; hiding
