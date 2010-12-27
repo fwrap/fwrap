@@ -39,6 +39,7 @@ def cy_deduplify(cy_ast, cfg):
         try:
             template_node = cy_create_template(procs, cfg)
         except UnableToMergeError, e:
+            print names_in_group, repr(e)
             #raise UnableToMergeError("Can not merge %r:\n%s" % (names_in_group, e))
             continue
         # Insert the created template at the position
