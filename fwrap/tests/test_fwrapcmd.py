@@ -338,7 +338,9 @@ def test_wrapcfile():
     ''')
 
     fwrap('create --f77binding test.pyx test.pyf')
-    snapshot('1')
+    infile_('b=1', 'test.pyx')
+    infile_('def object func(', 'test.pyx')
+    notinfile_('cpdef', 'test.pyx')
 
 @with_tempdir
 def test_genktp():
