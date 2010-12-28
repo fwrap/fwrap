@@ -562,13 +562,6 @@ class _CyArrayArg(_CyArgBase):
 
         if self.pyf_hide and self.cy_default_value is None:
             self.cy_default_value = CythonExpression('0', [], '0')
-            
-        if self.cy_default_value is not None:
-            literal = self.cy_default_value.as_literal()
-            if default_array_value_re.match(literal) is None:
-                raise NotImplementedError(
-                    'Only support zero default array values for now, not: %s' %
-                    self.cy_default_value)
 
         self._shape_expressions = self.cy_explicit_shape_expressions
         if self._shape_expressions is None:
@@ -645,7 +638,21 @@ class _CyArrayArg(_CyArgBase):
         # involves trying to parse the size expression to see if it
         # is simple enough.
         # TODO: Move parsing of shapes to _fc.
-
+            
+        if self.cy_default_value is not None:
+            try:
+                literal = self.cy_default_value.as_literal()
+            except ValueError:
+                literal = ''
+            if default_array_value_re.match(literal) is None:
+                # Has default value that is not 0, manual intervention
+                # needed (with f2py this could be a loop body)
+                cs = CodeSnippet(('init', self.intern_name))
+                cs.putln('##TODO %s = %s' %
+                         (self.intern_name,
+                          self.cy_default_value.substitute(fc_name_to_intern_name,
+                                                           fc_name_to_cy_name)[0]))
+                yield cs
         
         can_allocate = self.is_optional()
         if can_allocate and None in self._shape_expressions:
