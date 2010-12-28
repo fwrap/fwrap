@@ -313,11 +313,14 @@ class CToCython(object):
                     return '%s.shape[0]' % args[0]
                 else:
                     return 'np.PyArray_DIMS(%s)[0]' % args[0]
-            elif func == 'shape':
+            elif func in ('shape', 'old_shape'):
                 if doc:
-                    return '%s.shape[%s]' % (args[0], args[1])
+                    r = '%s.shape[%s]' % (args[0], args[1])
                 else:
-                    return 'np.PyArray_DIMS(%s)[%s]' % (args[0], args[1])
+                    r = 'np.PyArray_DIMS(%s)[%s]' % (args[0], args[1])
+                if func.startswith('old'):
+                    r = '##TODO Get shape before broadcasting: %s' % r
+                return r
             elif func == 'size':
                 if doc:
                     return '%s.size' % args[0]
@@ -325,12 +328,20 @@ class CToCython(object):
                     return 'np.PyArray_SIZE(%s)' % args[0]
             elif func in ('abs', 'min', 'max'):
                 return '%s(%s)' % (func, ', '.join(args))
+            elif func in ('rank', 'old_rank'):
+                if doc:
+                    r = '%s.ndim' % args[0]
+                else:
+                    r = 'np.PyArray_NDIM(%s)' % args[0]                
+                if func.startswith('old'):
+                    r = '##TODO Get ndim before broadcasting: %s' % r
+                return r
             else:
                 raise prs.ParseException("Unkown function")
             
         expr = prs.Forward()
 
-        func_call = (prs.Word(prs.alphas) + prs.Suppress('(') + expr +
+        func_call = (prs.Word(prs.alphas + '_') + prs.Suppress('(') + expr +
                      prs.ZeroOrMore(prs.Suppress(',') + expr) + prs.Suppress(')'))
         func_call.setParseAction(handle_func)
         cast = prs.Suppress('(') + prs.oneOf('int float') + prs.Suppress(')')
