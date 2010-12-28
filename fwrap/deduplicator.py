@@ -70,8 +70,8 @@ def cy_deduplify(cy_ast, cfg):
 def cy_create_template(procs, cfg):
     """Make an attempt to merge the given procedures into a template
     """
-
-    template_mgr = create_template_manager(cfg)
+    comment = '# Template for %s' % ', '.join(p.name for p in procs)
+    template_mgr = create_template_manager(cfg, comment)
     merged_attrs = merge_node_attributes(procs, template_mgr,
                                          exclude=('in_args', 'out_args', 'call_args',
                                                   'aux_args', 'all_dtypes_list'))
@@ -248,10 +248,11 @@ class TemplatedProcedure(cy_wrap.CyProcedure):
 class TemplateManager:
     var_pattern = None
     
-    def __init__(self):
+    def __init__(self, leading_comment=None):
         self.values_to_name = {}
         self.name_to_values = {}
         self.prefix_counters = {}
+        self.leading_comment = leading_comment
 
     def get_code_for_values(self, values, prefix='sub'):        
         return self.get_variable_code(
@@ -282,6 +283,8 @@ class TempitaManager(TemplateManager):
         var_by_name = self.name_to_values
         names = var_by_name.keys()
         names.sort()
+        if self.leading_comment is not None:
+            buf.putln(self.leading_comment)
         if len(var_by_name) == 1:
             buf.putln('{{for %s in %s_values}}' % (names[0], names[0]))
         else:
@@ -308,5 +311,5 @@ class TempitaManager(TemplateManager):
         buf.putln('{{endfor}}')
 
 
-def create_template_manager(cfg):
-    return TempitaManager()
+def create_template_manager(cfg, leading_comment=None):
+    return TempitaManager(leading_comment)
