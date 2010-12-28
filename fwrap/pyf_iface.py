@@ -25,8 +25,8 @@ def _py_kw_mangler(name):
         # Cython keywords
         'include', 'ctypedef', 'cdef', 'cpdef',
         'cimport', 'by',
-        # We always cimport numpy as np
-        'np'
+        # Global imports
+        'np', 'fc'
         )
     if name.lower() in kwds:
         return "%s__" % name

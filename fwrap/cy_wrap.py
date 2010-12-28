@@ -107,7 +107,9 @@ def get_aux_args(args):
 
 def generate_cy_pxd(ast, fc_pxd_name, buf, cfg):
     buf.putln('cimport numpy as np')
-    buf.putln("from %s cimport *" % fc_pxd_name)
+    buf.putln("from %s cimport *" %
+                constants.KTP_PXD_HEADER_SRC.split('.')[0])
+    buf.putln("cimport %s as fc" % fc_pxd_name)
     buf.putln('')
     for proc in ast:
         buf.putln(proc.cy_prototype(cfg))
@@ -979,7 +981,7 @@ class CyProcedure(AstNode):
         return "%s:" % self.cy_prototype(ctx.cfg, in_pxd=False)
 
     def proc_call(self, ctx):
-        proc_call = "%(call_name)s(%(call_arg_list)s)" % {
+        proc_call = "fc.%(call_name)s(%(call_arg_list)s)" % {
                 'call_name' : self.fc_name,
                 'call_arg_list' : ', '.join(self.arg_mgr.call_arg_list(ctx))}
         return proc_call
