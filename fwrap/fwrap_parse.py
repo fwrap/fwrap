@@ -119,13 +119,6 @@ def _get_params(proc, language):
             params.append(_get_param(var, language))
     return params
 
-def _get_callstatement(proc, language):
-    from fparser.statements import CallStatement
-    for line in proc.content:
-        if isinstance(line, CallStatement):
-            return line.expr
-    return None
-
 def _get_intent(arg, language):
     assert language != 'pyf'
     intents = []
@@ -147,13 +140,16 @@ def _get_intent(arg, language):
     return intents[0]
 
 def _get_pyf_proc_annotations(proc):
-    from fparser.statements import Intent
+    from fparser.statements import Intent, CallStatement    
     pyf_wraps_c = False
-    for obj in proc.content:
-        if isinstance(obj, Intent) and 'C' in obj.specs:
+    pyf_callstatement = None
+    for line in proc.content:
+        if isinstance(line, Intent) and 'C' in line.specs:
             pyf_wraps_c = True
-            break
-    return dict(pyf_wraps_c=pyf_wraps_c)
+        elif isinstance(line, CallStatement):
+            pyf_callstatement = line.expr
+    return dict(pyf_wraps_c=pyf_wraps_c,
+                pyf_callstatement=pyf_callstatement)
 
 def _get_pyf_arg_annotations(arg):
     # Parse Fwrap-compatible intents
