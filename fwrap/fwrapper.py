@@ -106,7 +106,11 @@ def generate(fort_ast, name, cfg, output_directory=None,
     if c_ast is None:
         c_ast = fc_wrap.wrap_pyf_iface(fort_ast)
     if cython_ast is None:
-        cython_ast = cy_wrap.wrap_fc(c_ast)
+        if cfg.f77binding:
+            import f77_wrap
+            cython_ast = f77_wrap.fortran_ast_to_cython_ast(fort_ast)
+        else:
+            cython_ast = cy_wrap.wrap_fc(c_ast)
 
     if pyf_to_merge is not None:
         # TODO: refactor
@@ -214,6 +218,12 @@ def generate_fc_f(fc_ast, name, cfg):
 def generate_fc_h(fc_ast, name, cfg):
     buf = CodeBuffer()
     fc_wrap.generate_fc_h(fc_ast, constants.KTP_HEADER_SRC, buf, cfg)
+    return buf
+
+def generate_f77_h(fort_ast, name, cfg):
+    buf = CodeBuffer()
+    import f77_wrap
+    f77_wrap.generate_fc_h(fort_ast, constants.KTP_HEADER_SRC, buf, cfg)
     return buf
 
 def fwrapper(use_cmdline, sources=None, **options):

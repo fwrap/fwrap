@@ -57,6 +57,8 @@ def fc_proc_to_cy_proc(fc_proc):
         all_dtypes_list=all_dtypes_list)
 
 def cy_arg_factory(arg, is_array):
+    # Is passed both fc_wrap arguments and pyf_iface arguments;
+    # their attributes mostly overlap
     import fc_wrap
     attrs = {}
     attrs['cy_name'] = _py_kw_mangler(arg.name)
@@ -65,7 +67,11 @@ def cy_arg_factory(arg, is_array):
             cls = CyCharArrayArg
         else:
             cls = _CyArrayArg
-        attrs['dimension'] = arg.orig_arg.dimension
+        if isinstance(arg, fc_wrap.FcArgBase):
+            attrs['dimension'] = arg.orig_arg.dimension
+        else:
+            attrs['dimension'] = arg.dimension
+            attrs['ndims'] = len(arg.dimension.dims)
     else:
         if isinstance(arg, fc_wrap.FcErrStrArg):
             cls = _CyErrStrArg
