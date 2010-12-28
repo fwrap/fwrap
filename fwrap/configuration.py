@@ -50,6 +50,7 @@ configuration_dom = {
         }),
     'exclude' : (LIST_ITEM, r'^[a-zA-Z0-9_]+$', None, {}),
     'template' : (LIST_ITEM, r'^[a-zA-Z0-9_,]+$', None, {}),
+    'template-pattern' : (LIST_ITEM, r'^[a-zA-Z0-9_,]+$', None, {}),
     'f77binding' : (ATTR, parse_bool, False, {}),
     'emulate-f2py' : (ATTR, parse_bool, False, {}),
     'detect-templates' : (ATTR, parse_bool, False, {}),
@@ -71,6 +72,10 @@ def add_cmdline_options(add_option):
                default=[],
                help='comma-seperated list of routines that makes up a template '
                '(in addition to the auto-detected ones)')
+    add_option('--template-pattern', type=str, action='append',
+               metavar='PATTERN',
+               default=[],
+               help='procs whose name match pattern make up a template')
     add_option('--emulate-f2py', action='store_true',
                help='go to greater lengths to behave like f2py')
     add_option('--dummy', action='store_true',
@@ -82,6 +87,7 @@ def _document_from_cmdline_options(options):
         'f77binding' : options.f77binding,
         'detect-templates' : options.detect_templates,
         'template' : [(x, {}) for x in options.template],
+        'template-pattern' : [(x, {}) for x in options.template_pattern],
         'emulate-f2py' : options.emulate_f2py
          }
 
@@ -93,7 +99,7 @@ class Configuration:
     # In preferred order when serializing:
     keys = ['version', 'self-sha1', 'pyf-sha1', 'wraps', 'exclude',
             'f77binding', 'detect-templates',
-            'template', 'emulate-f2py', 'auxiliary']
+            'template', 'template-pattern', 'emulate-f2py', 'auxiliary']
 
     @staticmethod
     def create_from_file(filename):
@@ -210,6 +216,9 @@ class Configuration:
 
     def get_templates(self):
         return [x.split(',') for x, attr in self.template]
+
+    def get_template_patterns(self):
+        return [x for x, attr in self.template_pattern]
 
     def should_emulate_f2py(self):
         return self.emulate_f2py

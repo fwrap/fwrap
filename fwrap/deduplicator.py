@@ -32,16 +32,31 @@ class UnableToMergeError(Exception):
 def cy_deduplify(cy_ast, cfg):
     name_to_proc = dict((proc.name, proc) for proc in cy_ast)
     procnames = name_to_proc.keys()
-    groups = find_candidate_groups_by_name(procnames)
+    groups = []
     groups.extend(cfg.get_templates())
+    for regex in cfg.get_template_patterns():
+        g = [x for x in procnames if re.match(regex, x)]
+        if len(g) > 1:
+            g.sort()
+            groups.append(g)
+    groups.extend(find_candidate_groups_by_name(procnames))
+    processed = set()
     for names_in_group in groups:
+        # Make sure each proc is only included in one group
+        names_in_group = [x for x in names_in_group
+                          if x not in processed]
+        if len(names_in_group) <= 1:
+            continue
+        # Try to merge proc asts into template ast
         procs = [name_to_proc[name] for name in names_in_group]
         try:
             template_node = cy_create_template(procs, cfg)
         except UnableToMergeError, e:
-            print names_in_group, repr(e)
+            print names_in_group, e
             #raise UnableToMergeError("Can not merge %r:\n%s" % (names_in_group, e))
             continue
+        # Went OK
+        processed.update(names_in_group)
         # Insert the created template at the position
         # of the *first* routine, and remove the other
         # routines
