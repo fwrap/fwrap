@@ -110,9 +110,7 @@ def generate_cy_pxd(ast, fc_pxd_name, buf, cfg):
     buf.putln("from %s cimport *" % fc_pxd_name)
     buf.putln('')
     for proc in ast:
-        proto = proc.cy_prototype(cfg)
-        if proto is not None:
-            buf.putln(proto)
+        buf.putln(proc.cy_prototype(cfg))
 
 def gen_cimport_decls(buf):
     for dtype in pyf_iface.intrinsic_types:
@@ -962,15 +960,7 @@ class CyProcedure(AstNode):
         return self.all_dtypes_list # TODO: Generate this instead
 
     def cy_prototype(self, cfg, in_pxd=True):
-        if self.pyf_wraps_c and in_pxd:
-            return None
-
-        if self.pyf_wraps_c:
-            # Name is already used in exposed C code, so can't
-            # use "api" keyword.            
-            template = "def %(proc_name)s(%(arg_list)s)"
-        else:
-            template = "cpdef api object %(proc_name)s(%(arg_list)s)"
+        template = "cpdef api object %(proc_name)s(%(arg_list)s)"
         # Need to use default values only for trailing arguments
         # Currently, no reordering is done, one simply allows
         # trailing arguments that have defaults (explicit-shape,
