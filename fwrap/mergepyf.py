@@ -318,6 +318,11 @@ class CToCython(object):
                     return '%s.shape[%s]' % (args[0], args[1])
                 else:
                     return 'np.PyArray_DIMS(%s)[%s]' % (args[0], args[1])
+            elif func == 'size':
+                if doc:
+                    return '%s.size' % args[0]
+                else:
+                    return 'np.PyArray_SIZE(%s)' % args[0]
             elif func in ('abs', 'min', 'max'):
                 return '%s(%s)' % (func, ', '.join(args))
             else:
