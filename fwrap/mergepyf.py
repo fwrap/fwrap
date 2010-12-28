@@ -25,6 +25,19 @@ def translate_default_value(arg, func_name):
                    pyf_default_value=None,
                    defer_init_to_body=defer)
     
+def translate_checks(args, func_name):
+    # Note: Removes pyf_check on each arg
+    checks = []
+    visited = []
+    for arg in args:
+        if arg in visited:
+            continue
+        visited.append(arg)
+        if arg.pyf_check is not None:
+            checks.extend([c_to_cython_warn(c, func_name)
+                           for c in arg.pyf_check])
+            arg.update(pyf_check=[])
+    return checks
 
 def create_from_pyf_postprocess(cython_ast):
     # Called on "fwrap create" command if source is a pyf file.  Does
@@ -38,7 +51,11 @@ def create_from_pyf_postprocess(cython_ast):
     for proc in cython_ast:
         for arg in proc.in_args + proc.aux_args:
             translate_default_value(arg, proc.name)
-        proc.update(in_args=process_in_args(proc.in_args))
+        checks = translate_checks(proc.in_args + proc.aux_args +
+                                  proc.out_args + proc.call_args,
+                                  proc.name)
+        proc.update(in_args=process_in_args(proc.in_args),
+                    checks=checks)
             
 def mergepyf_ast(cython_ast, cython_ast_from_pyf):
     # Called on "fwrap mergepyf" command
@@ -148,16 +165,15 @@ def mergepyf_proc(f_proc, pyf_proc):
     # Translate C expressions to Cython.
     # The check directives on arguments are moved to the procedure
     # (they often contain more than one argument...)
-    checks = []
+
+    checks = translate_checks(in_args + out_args + aux_args + call_args,
+                              func_name)
+    
     visited = [] # since arguments cannot be hashed
     for arg in in_args + out_args + aux_args + call_args:
         if arg in visited:
             continue
         visited.append(arg)
-        if arg.pyf_check is not None:
-            checks.extend([c_to_cython_warn(c, func_name)
-                           for c in arg.pyf_check])
-            arg.update(pyf_check=[])
 
         if arg.pyf_default_value is None and not arg.is_array:
             for dep in arg.pyf_depend:
