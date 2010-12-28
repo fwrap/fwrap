@@ -38,6 +38,7 @@ def create_from_pyf_postprocess(cython_ast):
     for proc in cython_ast:
         for arg in proc.in_args + proc.aux_args:
             translate_default_value(arg, proc.name)
+        proc.update(in_args=process_in_args(proc.in_args))
             
 def mergepyf_ast(cython_ast, cython_ast_from_pyf):
     # Called on "fwrap mergepyf" command
