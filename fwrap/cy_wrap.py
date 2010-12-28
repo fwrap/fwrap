@@ -968,7 +968,7 @@ class CyProcedure(AstNode):
         if self.pyf_wraps_c:
             # Name is already used in exposed C code, so can't
             # use "api" keyword.            
-            template = "def object %(proc_name)s(%(arg_list)s)"
+            template = "def %(proc_name)s(%(arg_list)s)"
         else:
             template = "cpdef api object %(proc_name)s(%(arg_list)s)"
         # Need to use default values only for trailing arguments
