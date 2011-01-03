@@ -1017,11 +1017,12 @@ class CyProcedure(AstNode):
         for line in self.arg_mgr.post_call_code(ctx):
             buf.putln(line)
 
-    def check_error(self, buf):
-        ck_err = ('if fw_iserr__ != FW_NO_ERR__:\n'
-                  '    raise RuntimeError(\"an error was encountered '
-                           "when calling the '%s' wrapper.\")") % self.cy_name
-        buf.putlines(ck_err)
+    def check_error(self, ctx, buf):
+        if not ctx.cfg.f77binding:
+            ck_err = ('if fw_iserr__ != FW_NO_ERR__:\n'
+                      '    raise RuntimeError(\"an error was encountered '
+                      'when calling the \'%s\' wrapper.")') % self.cy_name
+            buf.putlines(ck_err)
 
     def post_try_finally(self, ctx, buf):
         post_cc = CodeBuffer()
@@ -1033,7 +1034,7 @@ class CyProcedure(AstNode):
             buf.putln("try:")
             buf.indent()
 
-        self.check_error(buf)
+        self.check_error(ctx, buf)
 
         if use_try:
             buf.dedent()

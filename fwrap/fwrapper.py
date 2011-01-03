@@ -126,16 +126,16 @@ def generate(fort_ast, name, cfg, output_directory=None,
     # Generate files and write them out
     generators = [ (generate_fc_f, (c_ast, name, cfg),
                     (FC_F_TMPL_F77 if cfg.f77binding else FC_F_TMPL) % name ),
-                   (generate_fc_pxd,(c_ast, name), FC_PXD_TMPL % name),
                    (generate_cy_pxd,(cython_ast, name, cfg), CY_PXD_TMPL % name),
                    (generate_cy_pyx,(cython_ast, name, cfg, update_self_sha, update_pyf_sha),
                     (CY_PYX_IN_TMPL if cfg.detect_templates else CY_PYX_TMPL) % name) ]
     if not cfg.f77binding:
         generators.append((generate_type_specs, (c_ast,name), constants.TYPE_SPECS_SRC))
         generators.append((generate_fc_h, (c_ast, name, cfg), FC_HDR_TMPL % name))
+        generators.append((generate_fc_pxd,(c_ast, name), FC_PXD_TMPL % name))
     if cfg.f77binding:
         generators.append((generate_f77_h, (fort_ast, name, cfg), FC_HDR_TMPL % name))
-        
+        generators.append((generate_f77_pxd, (fort_ast, name, cfg), FC_PXD_TMPL % name))
 
     created_files = [file_name
                      for generator, args, file_name in generators]
@@ -224,6 +224,13 @@ def generate_f77_h(fort_ast, name, cfg):
     buf = CodeBuffer()
     import f77_wrap
     f77_wrap.generate_fc_h(fort_ast, constants.KTP_HEADER_SRC, buf, cfg)
+    return buf
+
+def generate_f77_pxd(fort_ast, name, cfg):
+    buf = CodeBuffer()
+    import f77_wrap
+    fc_header_name = constants.FC_HDR_TMPL % name
+    f77_wrap.generate_fc_pxd(fort_ast, fc_header_name, buf, cfg)
     return buf
 
 def fwrapper(use_cmdline, sources=None, **options):
