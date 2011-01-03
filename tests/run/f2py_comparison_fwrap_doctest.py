@@ -202,5 +202,10 @@ Type casting::
     array([1, 2, 3, 4], dtype=int32)
 
 
+Function::
+
+    >>> getten()
+    10
+
 """
 

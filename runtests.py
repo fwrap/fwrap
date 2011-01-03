@@ -191,12 +191,13 @@ class FwrapCompileTestCase(unittest.TestCase):
         try:
             sys.stdout = StringIO()
             sys.stderr = StringIO()
+            opts = ['--no-wrap-functions']
             with working_directory(self.projdir):
                 # Invoke just to create C file, for inspection
-                with process_args_as([pyf_file]):
+                with process_args_as(opts + [pyf_file]):
                     f2pymain()
                 # Compile all the way to .so
-                with process_args_as(['-c', pyf_file, f_file]):
+                with process_args_as(opts + ['-c', pyf_file, f_file]):
                     f2pymain()
         finally:
             sys.stdout, sys.stderr = oldpipes

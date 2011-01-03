@@ -62,6 +62,10 @@ python module f2py_comparison_f2py
 !!$      end subroutine tricky_case
 
 
+      function getten()
+        integer :: getten
+      end function
+
     end interface
 end python module f2py_comparison_f2py
 

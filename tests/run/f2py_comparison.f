@@ -82,6 +82,11 @@ C configure-flags: --f77binding --f2py-comparison
         enddo
       end subroutine swilk
 
+      function getten()
+        integer getten
+        getten = 10
+      end function
+
       
 c$$$      subroutine tricky_case(n, arr)
 c$$$      integer arr(n)
