@@ -724,12 +724,17 @@ class Function(Procedure):
                             return_arg=self.return_arg,
                             params=self.params)
 
+    def get_return_c_type(self):
+        return self.return_arg.dtype.fw_ktp
+
 class Subroutine(Procedure):
     kind = 'subroutine'
 
     def _update(self):
         self.arg_man = ArgManager(self.args, params=self.params)
 
+    def get_return_c_type(self):
+        return 'void'
 
 class Module(object):
 

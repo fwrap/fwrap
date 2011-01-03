@@ -40,30 +40,36 @@ def iface_proc_to_cy_proc(proc):
     from cy_wrap import (cy_arg_factory, CyProcedure, get_in_args,
                          get_out_args)
     
-    args = [cy_arg_factory(arg, arg.dimension is not None)
-            for arg in proc.args]
+    call_args = [cy_arg_factory(arg, arg.dimension is not None)
+                 for arg in proc.args]
     if proc.kind == 'function':
-        return_arg = cy_arg_factory(proc.return_arg,
-                                    proc.return_arg.dimension is not None)
+        if proc.return_arg.dimension is not None:
+            raise AssertionError()
+        return_arg = cy_arg_factory(proc.return_arg, False)
         return_arg.update(intent='out',
                           cy_name=constants.RETURN_ARG_NAME)
-        args.insert(0, return_arg)
+        return_args = [return_arg]
+    else:
+        return_arg = None
+        return_args = []
         
-    in_args = get_in_args(args)
-    out_args = get_out_args(args)
+    in_args = get_in_args(call_args)
+    out_args = return_args + get_out_args(call_args)
     
-    all_dtypes_list = [arg.dtype for arg in args]
+    all_dtypes_list = [arg.dtype for arg in call_args]
 
     return CyProcedure.create_node_from(
         proc,
         name=proc.name,
         fc_name=proc.name,
         cy_name=_py_kw_mangler(proc.name),
-        call_args=args,
+        call_args=call_args,
         in_args=in_args,
         out_args=out_args,
         aux_args=[],
-        all_dtypes_list=all_dtypes_list)
+        all_dtypes_list=all_dtypes_list,
+        return_arg=return_arg)
+    
 
 
 
@@ -108,10 +114,9 @@ class GenerateFcHeader(Generator):
 
     def procedure_declaration(self, proc):
         decls = ["%s %s" % (arg.c_type(), arg.name)
-                 for arg in proc.args]
-        if proc.kind == 'function':
-            decls.insert(0, "%s retval__" % proc.return_arg.c_type())
-        self.putln("FORTRAN_CALLSPEC void F_FUNC(%s,%s)(%s);" % (
+                 for arg in proc.args]        
+        self.putln("FORTRAN_CALLSPEC %s F_FUNC(%s,%s)(%s);" % (
+            proc.get_return_c_type(),
             proc.name.lower(),
             proc.name.upper(),
             ", ".join(decls)))
@@ -143,9 +148,8 @@ class GenerateFcPxd(Generator):
 
     def procedure_declaration(self, proc):
         decls = ["%s %s" % (arg.c_type(), _py_kw_mangler(arg.name))
-                 for arg in proc.args]
-        if proc.kind == 'function':
-            decls.insert(0, "%s retval__" % proc.return_arg.c_type())
-        self.putln("void %s(%s)" % (
+                 for arg in proc.args]        
+        self.putln("%s %s(%s)" % (
+            proc.get_return_c_type(),
             proc.name,
             ", ".join(decls)))

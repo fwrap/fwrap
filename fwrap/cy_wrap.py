@@ -626,13 +626,13 @@ class _CyArrayArg(_CyArgBase):
             offset_code = ' + %s' % self.mem_offset_code
         else:
             offset_code = ''
-        if ctx.cfg.f77binding or self.mem_offset_code is not None:
-            shape_expr = self.shape_var_name
+        if ctx.cfg.f77binding:
+            shape_args = []
         else:
-            shape_expr = 'np.PyArray_DIMS(%s)' % self.intern_name
-        return [shape_expr,
-                '<%s*>np.PyArray_DATA(%s)%s' %
-                (self.ktp, self.intern_name, offset_code)]
+            shape_args = ['np.PyArray_DIMS(%s)' % self.intern_name]
+        return shape_args + [
+            '<%s*>np.PyArray_DATA(%s)%s' %
+            (self.ktp, self.intern_name, offset_code)]
 
     def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
         d = {'intern' : self.intern_name,
@@ -868,7 +868,11 @@ class CyArgManager(object):
                                  if arg not in self.in_args] +
                                 [arg for arg in self.call_args if
                                  arg not in self.in_args and
-                                 arg not in self.aux_args])
+                                 arg not in self.aux_args] +
+                                [arg for arg in self.out_args if
+                                 arg not in self.in_args and
+                                 arg not in self.aux_args and
+                                 arg not in self.call_args])
 
     def call_arg_list(self, ctx):
         cal = []
@@ -956,6 +960,15 @@ class CyProcedure(AstNode):
     pyf_pre_call_code = None
     pyf_post_call_code = None
 
+    # Only used in f77binding (otherwise the function is wrapped
+    # to become a subprocedure instead). The return_arg should
+    # also be part of out_args (but not call_args). I.e. the logic
+    # is:
+    #
+    # [$return_arg =,] fc.function(*$call_args)
+    # return $out_args
+    return_arg = None
+
     def _update(self):
         self.arg_mgr = CyArgManager(self.in_args, self.out_args, self.call_args,
                                     self.aux_args)
@@ -987,9 +1000,16 @@ class CyProcedure(AstNode):
         return "%s:" % self.cy_prototype(ctx.cfg, in_pxd=False)
 
     def proc_call(self, ctx):
-        proc_call = "fc.%(call_name)s(%(call_arg_list)s)" % {
-                'call_name' : self.fc_name,
-                'call_arg_list' : ', '.join(self.arg_mgr.call_arg_list(ctx))}
+        if self.return_arg is None:
+            return_assign = ''
+        else:
+            return_assign = '%s = ' % self.return_arg.intern_name
+            
+        proc_call = "%(return_assign)sfc.%(call_name)s(%(call_arg_list)s)" % dict(
+            call_name=self.fc_name,
+            call_arg_list=', '.join(self.arg_mgr.call_arg_list(ctx)),
+            return_assign=return_assign)
+                                        
         return proc_call
 
     def temp_declarations(self, buf, ctx):
