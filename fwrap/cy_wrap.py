@@ -552,7 +552,6 @@ class _CyArrayArg(_CyArgBase):
     def _update(self):
         from fwrap.gen_config import py_type_name_from_type
         self.intern_name = '%s_' % self.cy_name
-        self.shape_var_name = '%s_shape_' % self.cy_name
 
         # In the special case of explicit-shape intent(out) arrays,
         # find the expressions for constructing the output argument
@@ -612,10 +611,6 @@ class _CyArrayArg(_CyArgBase):
 
     def intern_declarations(self, ctx, extern_decl_made):
         decls = ["cdef np.ndarray %s" % self.intern_name]
-        if ctx.cfg.f77binding or self.mem_offset_code is not None:
-            decls.append("cdef fw_shape_t %s[%d]" %
-                         (self.shape_var_name,
-                          self.ndims))
         return decls            
 
     def _get_py_dtype_name(self):
@@ -714,23 +709,6 @@ class _CyArrayArg(_CyArgBase):
         else:
             cs.putln('%(intern)s, %(extern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '
                      '%(ndim)d, %(copy)s%(alignstr)s)' % d)
-
-        #
-        # May need to copy shape into new array as well
-        #
-        if ctx.cfg.f77binding or self.mem_offset_code is not None:
-            ctx.use_utility_code(copy_shape_utility_code)
-            cs.putln('fw_copyshape(%s, np.PyArray_DIMS(%s), %d)',
-                     self.shape_var_name, self.intern_name, self.ndims)
-            arr_shape_expr = self.shape_var_name
-        else:
-            arr_shape_expr = 'np.PyArray_DIMS(%s)' % self.intern_name
-            
-        if self.mem_offset_code is not None:
-            if self.ndims != 1:
-                raise NotImplementedError()
-            cs.putln('%s[0] -= %s', self.shape_var_name, self.mem_offset_code)
-
         yield cs
 
         #
@@ -739,7 +717,6 @@ class _CyArrayArg(_CyArgBase):
         if ctx.cfg.f77binding:
             cs = CodeSnippet(('check', self.intern_name),
                              [('init', self.intern_name)])
-            d.update(arr_shape_expr=arr_shape_expr)
             for idx, info in enumerate(shape_info):
                 if info is None:
                     continue
@@ -752,14 +729,14 @@ class _CyArrayArg(_CyArgBase):
                     # last dimension, can truncate
                     cs.put(
                         '''\
-                        if not (0 <= %(expr)s <= %(arr_shape_expr)s[%(idx)d]):
-                            raise ValueError("(0 <= %(doc)s <= %(extern)s.shape[%(idx)d]%(mem_offset_code)s) not satisifed")
+    if not (0 <= %(expr)s <= np.PyArray_DIMS(%(intern)s)[%(idx)d]%(mem_offset_code)s):
+        raise ValueError("(0 <= %(doc)s <= %(extern)s.shape[%(idx)d]%(mem_offset_code)s) not satisifed")
                     ''' % d)
                 else:
                     cs.put(
                         '''\
-                        if %(expr)s != %(arr_shape_expr)s[%(idx)d]:
-                            raise ValueError("(%(doc)s == %(extern)s.shape[%(idx)d]) not satisifed")
+    if %(expr)s != np.PyArray_DIMS(%(intern)s)[%(idx)d]:
+        raise ValueError("(%(doc)s == %(extern)s.shape[%(idx)d]) not satisifed")
                     ''' % d)
             yield cs
 
@@ -1221,15 +1198,6 @@ class CythonExpression(object):
     def __repr__(self):
         return "<CythonExpression %r (depends: %r)>" % (self.template, self.requires)
 
-
-copy_shape_utility_code = u"""
-cdef void fw_copyshape(fw_shape_t *target, np.intp_t *source, int ndim):
-    # In f77binding mode, we do not always have fw_shape_t and np.npy_intp
-    # as the same type, so must make a copy
-    cdef int i
-    for i in range(ndim):
-        target[i] = source[i]
-"""
 
 explicit_shape_array_utility_code = u"""
 cdef object fw_explicitshapearray(object value, int typenum, int ndim,
