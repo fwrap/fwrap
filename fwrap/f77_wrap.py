@@ -38,7 +38,7 @@ def fortran_ast_to_cython_ast(ast):
 
 def iface_proc_to_cy_proc(proc):
     from cy_wrap import (cy_arg_factory, CyProcedure, get_in_args,
-                         get_out_args)
+                         get_out_args, get_aux_args)
     
     call_args = [cy_arg_factory(arg, arg.dimension is not None)
                  for arg in proc.args]
@@ -55,6 +55,7 @@ def iface_proc_to_cy_proc(proc):
         
     in_args = get_in_args(call_args)
     out_args = return_args + get_out_args(call_args)
+    aux_args = get_aux_args(call_args)
     
     all_dtypes_list = [arg.dtype for arg in call_args]
 
@@ -66,7 +67,7 @@ def iface_proc_to_cy_proc(proc):
         call_args=call_args,
         in_args=in_args,
         out_args=out_args,
-        aux_args=[],
+        aux_args=aux_args,
         all_dtypes_list=all_dtypes_list,
         return_arg=return_arg)
     
