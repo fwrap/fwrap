@@ -240,7 +240,7 @@ def mergepyf_cmd(opts):
     # (This regenerates the _fc-files if the if-test above hits;
     # TODO: break this up some, but overhead is negligible)
     fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
-                      c_ast=c_ast, cython_ast=merged_cython_ast,
+                      c_ast=None, cython_ast=merged_cython_ast,
                       update_self_sha=False,
                       update_pyf_sha=True)
     message = opts.message
