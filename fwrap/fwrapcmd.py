@@ -191,12 +191,15 @@ def mergepyf_cmd(opts):
 
     f_ast = fwrapper.filter_ast(f_ast, cfg) # remove excluded routines from ast
 
+    assert cfg.f77binding
+    import f77_wrap
+
     # Continue pipeline for both Fortran and pyf
-    c_ast = fc_wrap.wrap_pyf_iface(f_ast)
-    cython_ast = cy_wrap.wrap_fc(c_ast)
+    #c_ast = f77_wrap.wrap_pyf_iface(f_ast)
+    cython_ast = f77_wrap.fortran_ast_to_cython_ast(f_ast)
     
-    pyf_c_ast = fc_wrap.wrap_pyf_iface(pyf_f_ast)
-    pyf_cython_ast = cy_wrap.wrap_fc(pyf_c_ast)
+    #pyf_c_ast = fc_wrap.wrap_pyf_iface(pyf_f_ast)
+    pyf_cython_ast = f77_wrap.fortran_ast_to_cython_ast(pyf_f_ast)
 
     # Do the merge of Cython ast
     merged_cython_ast = mergepyf.mergepyf_ast(cython_ast, pyf_cython_ast)
@@ -219,7 +222,7 @@ def mergepyf_cmd(opts):
         # This provides a better commit for later merges.
         if len(excluded_by_pyf) > 0:
             fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
-                              c_ast=c_ast, cython_ast=cython_ast,
+                              c_ast=None, cython_ast=cython_ast,
                               update_self_sha=True)
             commit_wrapper(cfg,
                            message='(do not squash) Removed routines not present in %s' % opts.pyf)

@@ -66,9 +66,10 @@ def build(bld):
     cy_in_src = '%s.in' % cy_src if detect_templates else cy_src
 
     if want_f77:
-        type_specs = []
+        target = [cy_in_src]
     else:
-        type_specs = ['fwrap_type_specs.in']
+        target = ['fwrap_type_specs.in', '%s_fc.f90' % bld.env['FW_PROJ_NAME'],
+                  cy_in_src]
 
     flags = []
     if want_f77:
@@ -86,7 +87,7 @@ def build(bld):
         rule = '${PYTHON} ${FWRAPPER} --name=%s %s ${FWRAPPER_OPTS} ${SRC}' % (
             bld.env['FW_PROJ_NAME'], ' '.join(flags)),
         source = bld.srcnode.ant_glob(['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']),
-        target = type_specs + [wrapper, cy_in_src],
+        target = target
         )
 
     if detect_templates:
@@ -119,7 +120,7 @@ def build(bld):
             after = 'generate_typemap',
             features = 'c fc pyext cshlib',
             source = bld.srcnode.ant_glob(['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']) +
-                     [cy_src, wrapper],
+                     [cy_src],
             target = bld.env['FW_PROJ_NAME'],
             use = 'fcshlib CLIB NUMPY',
             includes = ['.'],

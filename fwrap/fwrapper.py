@@ -103,33 +103,34 @@ def generate(fort_ast, name, cfg, output_directory=None,
     # logger.info("Generating abstract syntax tress for c and cython.")
     fort_ast = filter_ast(fort_ast, cfg)
     routine_names = [sub.name for sub in fort_ast]
-    if c_ast is None:
-        c_ast = fc_wrap.wrap_pyf_iface(fort_ast)
     if cython_ast is None:
         if cfg.f77binding:
             import f77_wrap
             cython_ast = f77_wrap.fortran_ast_to_cython_ast(fort_ast)
         else:
+            if c_ast is None:
+                c_ast = fc_wrap.wrap_pyf_iface(fort_ast)
             cython_ast = cy_wrap.wrap_fc(c_ast)
 
     if pyf_to_merge is not None:
         # TODO: refactor
-        pyf_ast = parse([pyf_to_merge], cfg)
-        pyf_ast = fc_wrap.wrap_pyf_iface(pyf_ast)
-        pyf_ast = cy_wrap.wrap_fc(pyf_ast)
-        import mergepyf
+        assert cfg.f77binding
+        import f77_wrap, mergepyf
+        pyf_f_ast = parse([pyf_to_merge], cfg)
+        pyf_ast = f77_wrap.fortran_ast_to_cython_ast(pyf_f_ast)
         cython_ast = mergepyf.mergepyf_ast(cython_ast, pyf_ast)
     elif only_pyf:
         import mergepyf
         mergepyf.create_from_pyf_postprocess(cython_ast)
 
     # Generate files and write them out
-    generators = [ (generate_fc_f, (c_ast, name, cfg),
-                    (FC_F_TMPL_F77 if cfg.f77binding else FC_F_TMPL) % name ),
+    generators = [ 
                    (generate_cy_pxd,(cython_ast, name, cfg), CY_PXD_TMPL % name),
                    (generate_cy_pyx,(cython_ast, name, cfg, update_self_sha, update_pyf_sha),
                     (CY_PYX_IN_TMPL if cfg.detect_templates else CY_PYX_TMPL) % name) ]
     if not cfg.f77binding:
+        generators.append((generate_fc_f, (c_ast, name, cfg),
+                           (FC_F_TMPL_F77 if cfg.f77binding else FC_F_TMPL) % name ))
         generators.append((generate_type_specs, (c_ast,name), constants.TYPE_SPECS_SRC))
         generators.append((generate_fc_h, (c_ast, name, cfg), FC_HDR_TMPL % name))
         generators.append((generate_fc_pxd,(c_ast, name), FC_PXD_TMPL % name))

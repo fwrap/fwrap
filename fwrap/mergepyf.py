@@ -104,6 +104,7 @@ def mergepyf_proc(f_proc, pyf_proc):
     # possible, and leave the rest to the user.
     func_name = f_proc.name
     callstat = pyf_proc.pyf_callstatement
+    return_arg = None
 
     if callstat is None:
         # We can simply use the pyf argument list and be satisfied
@@ -112,6 +113,11 @@ def mergepyf_proc(f_proc, pyf_proc):
         # TODO: Verify that types match as well
         call_args = [arg.copy() for arg in pyf_proc.call_args]
         pre_call_code = post_call_code = None
+        if f_proc.kind == 'function':
+            if (pyf_proc.kind != 'function' or
+                f_proc.return_arg != pyf_proc.return_arg):
+                raise CouldNotMergeError('return arg differns in pyf and f description')
+            return_arg = f_proc.return_arg.copy()
     else:
         # Do NOT trust the name or order in pyf_proc.call_args,
         # but match arguments by their position in the callstatement
@@ -121,30 +127,26 @@ def mergepyf_proc(f_proc, pyf_proc):
         pre_call_code, post_call_code, arg_exprs = parse_callstatement(callstat)
         arg_exprs = arg_exprs.split(',')
 
-        # Strip off error arguments (but leave return value)
-        assert f_proc.call_args[-2].name == constants.ERR_NAME
-        assert f_proc.call_args[-1].name == constants.ERRSTR_NAME
-        fortran_args = f_proc.call_args[:-2]
+        # Treat return argument as first call_args argument
+        fortran_args = f_proc.call_args #[:-2]
+        if f_proc.kind == 'function':
+            fortran_args.insert(0, f_proc.return_arg)
+
         if len(fortran_args) != len(arg_exprs):
-            raise CouldNotMergeError('"%s": pyf and f disagrees, '
-                             'len(fortran_args) != len(arg_exprs)' % pyf_proc.name)
+            raise CouldNotMergeError(
+                '"%s": pyf and f disagrees, '
+                'len(fortran_args) != len(arg_exprs)' % pyf_proc.name)
         # Build call_args from the strings present in the callstatement
         for idx, (f_arg, expr) in enumerate(zip(fortran_args, arg_exprs)):
-            if idx == 0 and pyf_proc.kind == 'function':
-                # NOT the same as f_proc.kind == 'function'
-                
-                # We can't resolve by name for the return arg, but it will
-                # always be first. This case does not hit for functions
-                # declared as subprocs in pyf, where the return arg *can*
-                # be reorderd, but also carries a user-given name for matching.
-                arg = pyf_proc.call_args[0].copy()
+            if idx == 0 and f_proc.kind == 'function':
+                if pyf_proc.kind == 'subroutine':
+                    return_arg = parse_callstatement_arg(expr, f_arg, pyf_args)
+                else:
+                    return_arg = f_proc.return_arg.copy()
             else:
                 arg = parse_callstatement_arg(expr, f_arg, pyf_args)
-            call_args.append(arg)
-            
-        # Reinsert the extra error-handling and function return arguments
-        call_args.append(f_proc.call_args[-2].copy())
-        call_args.append(f_proc.call_args[-1].copy())
+                call_args.append(arg)
+
 
 
     # Make sure our three lists (in/out/callargs) contain the same
@@ -206,7 +208,8 @@ def mergepyf_proc(f_proc, pyf_proc):
                                  checks=checks,
                                  language='pyf',
                                  pyf_pre_call_code=pre_call_code,
-                                 pyf_post_call_code=post_call_code)
+                                 pyf_post_call_code=post_call_code,
+                                 return_arg=return_arg)
     return result
 
 callstatement_arg_re = re.compile(r'^\s*(&)?\s*([a-zA-Z0-9_]+)(\s*\+\s*([a-zA-Z0-9_]+))?\s*$')
