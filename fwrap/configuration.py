@@ -50,7 +50,7 @@ configuration_dom = {
         }),
     'exclude' : (LIST_ITEM, r'^[a-zA-Z0-9_]+$', None, {}),
     'template' : (LIST_ITEM, r'^[a-zA-Z0-9_,]+$', None, {}),
-    'template-pattern' : (LIST_ITEM, r'^[a-zA-Z0-9_,]+$', None, {}),
+    'template-pattern' : (LIST_ITEM, r'.*', None, {}),
     'f77binding' : (ATTR, parse_bool, False, {}),
     'emulate-f2py' : (ATTR, parse_bool, False, {}),
     'detect-templates' : (ATTR, parse_bool, False, {}),
