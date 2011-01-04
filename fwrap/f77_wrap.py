@@ -120,7 +120,7 @@ class GenerateFcHeader(Generator):
             proc.get_return_c_type(),
             proc.name.lower(),
             proc.name.upper(),
-            ", ".join(decls)))
+            ", ".join(decls) if len(decls) > 0 else 'void'))
 
 
 #
