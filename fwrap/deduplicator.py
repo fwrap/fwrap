@@ -285,27 +285,22 @@ class TempitaManager(TemplateManager):
         names.sort()
         if self.leading_comment is not None:
             buf.putln(self.leading_comment)
-        if len(var_by_name) == 1:
-            buf.putln('{{for %s in %s_values}}' % (names[0], names[0]))
-        else:
-            list_strings = [repr(list(var_by_name[name])) for name in names]
 
+        list_strings = [repr(list(var_by_name[name])) for name in names]
+            
+        if len(list_strings) == 1:
+            buf.putln('{{for %s in %s}}' % (names[0], list_strings[0]))
+        else:
             # Get indents right by using these temporaries
             opfor_ = '{{for %s'
-            zipfin = '      in zip(%s)}}'
             mulbeg = '      in zip(%s,'
             mulmid = '             %s,'
             mulend = '             %s)}}'
-            
             buf.putln(opfor_ % ', '.join(names))
-            if len(list_strings) == 1:
-                buf.putln(zipfin % list_strings[0])
-            else:
-                buf.putln(mulbeg % list_strings[0])
-                for list_string in list_strings[1:-1]:
-                    buf.putln(mulmid % list_string)
-                buf.putln(mulend % list_strings[-1])
-                         
+            buf.putln(mulbeg % list_strings[0])
+            for list_string in list_strings[1:-1]:
+                buf.putln(mulmid % list_string)
+            buf.putln(mulend % list_strings[-1])
 
     def put_end_loop(self, buf):
         buf.putln('{{endfor}}')
