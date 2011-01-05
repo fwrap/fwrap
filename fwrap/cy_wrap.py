@@ -205,6 +205,7 @@ class _CyArgBase(AstNode):
     pyf_overwrite_flag_default = None
     pyf_optional = False
     pyf_align = None
+    pyf_by_value = False
     
     cy_default_value = None # or CythonExpression
 
@@ -301,7 +302,10 @@ class _CyArg(_CyArgBase):
             return []
 
     def call_arg_list(self, ctx):
-        return ["&%s" % self.intern_name]
+        if self.pyf_by_value and not self.is_array:
+            return [self.intern_name]
+        else:
+            return ["&%s" % self.intern_name]
 
     def post_call_code(self, ctx):
         return []

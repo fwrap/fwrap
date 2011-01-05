@@ -134,6 +134,9 @@ class Dtype(object):
     def all_dtypes(self):
         return [self]
 
+    def c_declaration_byval(self):
+        return self.fw_ktp
+
     def c_declaration(self):
         return "%s *" % self.fw_ktp
 
@@ -346,6 +349,9 @@ class _NamedType(object):
         orig = cfg.fc_wrapper_orig_types
         return '%s :: %s' % ( ', '.join(self.var_specs(orig)), self.name)
 
+    def c_type_byval(self):
+        return self.dtype.c_declaration_byval()
+
     def c_type(self):
         return self.dtype.c_declaration()
 
@@ -513,6 +519,7 @@ class Argument(AstNode):
     pyf_overwrite_flag_default = None
     pyf_optional = False
     pyf_align = None
+    pyf_by_value = False
 
     def _update(self):
         self._var = Var(name=self.name, dtype=self.dtype,
@@ -545,6 +552,10 @@ class Argument(AstNode):
         if self.intent and not self.is_return_arg:
             return ['intent(%s)' % self.intent]
         return []
+
+    def c_type_byval(self):
+        assert self.dimension is None
+        return self._var.c_type_byval()
 
     def c_type(self):
         return self._var.c_type()

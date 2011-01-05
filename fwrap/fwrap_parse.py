@@ -192,6 +192,8 @@ def _get_pyf_arg_annotations(arg):
             align = 8
         elif 'ALIGNED16' in arg.intent:
             align = 16
+
+    pyf_by_value = ('C' in arg.intent)
         
     annotations = dict(pyf_hide=hide,
                        pyf_default_value=arg.init,
@@ -203,6 +205,7 @@ def _get_pyf_arg_annotations(arg):
                        pyf_optional=arg.is_optional(),
                        pyf_depend=arg.depend,
                        pyf_align=align,
+                       pyf_by_value=pyf_by_value
                        )
 
     return intent, annotations

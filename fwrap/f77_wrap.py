@@ -71,15 +71,25 @@ def iface_proc_to_cy_proc(proc):
         all_dtypes_list=all_dtypes_list,
         return_arg=return_arg)
     
-
-
+#
+# Common utils
+#
+def get_arg_type(arg):
+    if arg.pyf_by_value and arg.dimension is None:
+        return arg.c_type_byval()
+    else:
+        return arg.c_type()
 
 #
 # _fc.h generation
 #
 
 def generate_fc_h(ast, ktp_header_name, buf, cfg):
-    GenerateFcHeader(ast, ktp_header_name, buf, cfg).generate()
+    if all(proc.pyf_wraps_c for proc in ast):
+        # All procs are intent(c), so do not need name-mangling header
+        return
+    else:
+        GenerateFcHeader(ast, ktp_header_name, buf, cfg).generate()
 
 class GenerateFcHeader(Generator):
     def __init__(self, ast, ktp_header_name, buf, cfg):
@@ -114,13 +124,22 @@ class GenerateFcHeader(Generator):
         self.putln('#endif')
 
     def procedure_declaration(self, proc):
-        decls = ["%s %s" % (arg.c_type(), arg.name)
-                 for arg in proc.args]        
-        self.putln("FORTRAN_CALLSPEC %s F_FUNC(%s,%s)(%s);" % (
-            proc.get_return_c_type(),
-            proc.name.lower(),
-            proc.name.upper(),
-            ", ".join(decls) if len(decls) > 0 else 'void'))
+        decls = ["%s %s" % (get_arg_type(arg), arg.name)
+                 for arg in proc.args]
+        argstr = (", ".join(decls) if len(decls) > 0 else 'void')
+        if proc.pyf_wraps_c:
+            self.putln("FORTRAN_CALLSPEC %s %s(%s);" % (
+                proc.get_return_c_type(),
+                proc.name,
+                argstr))
+            
+        else:
+            self.putln("FORTRAN_CALLSPEC %s F_FUNC(%s,%s)(%s);" % (
+                proc.get_return_c_type(),
+                proc.name.lower(),
+                proc.name.upper(),
+                argstr))
+
 
 
 #
@@ -136,19 +155,23 @@ class GenerateFcPxd(Generator):
         self.fc_header_name = fc_header_name
         self.set_buffer(buf)
         self.cfg = cfg
+        self.use_header = not all(proc.pyf_wraps_c for proc in ast)
 
     def generate(self):
         self.putln("from %s cimport *" %
                    constants.KTP_PXD_HEADER_SRC.split('.')[0])
         self.putln('')
-        self.putln('cdef extern from "%s":' % self.fc_header_name)
+        if self.use_header:
+            self.putln('cdef extern from "%s":' % self.fc_header_name)
+        else:
+            self.putln('cdef extern:')
         self.indent()
         for proc in self.procs:
             self.procedure_declaration(proc)
         self.dedent()
 
     def procedure_declaration(self, proc):
-        decls = ["%s %s" % (arg.c_type(), _py_kw_mangler(arg.name))
+        decls = ["%s %s" % (get_arg_type(arg), _py_kw_mangler(arg.name))
                  for arg in proc.args]        
         self.putln("%s %s(%s)" % (
             proc.get_return_c_type(),
