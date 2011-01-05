@@ -312,7 +312,9 @@ class CToCython(object):
         def passthrough_op(s, loc, tok):
             return '(%s)' % ' '.join(tok[0])
 
-        _c_to_cython_bool = {'&&' : 'and', '||' : 'or', '/' : '//', '*' : '*'}
+        # Translate operators. The result string is a template, so % -> %%
+        _c_to_cython_bool = {'&&' : 'and', '||' : 'or', '/' : '//', '*' : '*',
+                             '%' : '%%'}
         def translate_op(s, loc, tok):
             tok = tok[0]
             translated = [x if idx % 2 == 0 else _c_to_cython_bool[x]
@@ -369,7 +371,7 @@ class CToCython(object):
         expr << prs.operatorPrecedence(var_or_literal | func_call, [
             ('!', 1, prs.opAssoc.RIGHT, handle_not),
             (cast, 1, prs.opAssoc.RIGHT, handle_cast),
-            (prs.oneOf('* /'), 2, prs.opAssoc.LEFT, translate_op),
+            (prs.oneOf('* / %'), 2, prs.opAssoc.LEFT, translate_op),
             (prs.oneOf('+ -'), 2, prs.opAssoc.LEFT, passthrough_op),
             (prs.oneOf('== != <= >= < >'), 2, prs.opAssoc.LEFT, passthrough_op),
             (prs.oneOf('|| &&'), 2, prs.opAssoc.LEFT, translate_op),
