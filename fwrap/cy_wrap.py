@@ -270,7 +270,10 @@ class _CyArg(_CyArgBase):
 
     def _get_py_dtype_name(self):
         from fwrap.gen_config import py_type_name_from_type
-        return py_type_name_from_type(self.cy_dtype_name)
+        if isinstance(self.dtype, pyf_iface.CharacterType):
+            return 'bytes'
+        else:
+            return py_type_name_from_type(self.cy_dtype_name)
 
     def extern_declarations(self):
         """
@@ -406,7 +409,7 @@ class _CyStringArg(_CyArg):
         self.intern_buf_name = '%s_buf' % self.intern_name
 
     def _get_cy_dtype_name(self):
-        return "fw_bytes"
+        return "bytes"
 
     def _get_py_dtype_name(self):
         from fwrap.gen_config import py_type_name_from_type
@@ -493,8 +496,7 @@ class _CyStringArg(_CyArg):
         return []
 
     def _gen_dstring(self):
-        dstring = ["%s : %s" %
-                    (self.cy_name, self._get_py_dtype_name())]
+        dstring = ["%s : bytes" % self.cy_name]
         dstring.append("len %s" % self.get_len())
         if self.intent is not None:
             dstring.append("intent %s" % (self.intent))
