@@ -1138,9 +1138,11 @@ class CyProcedure(AstNode):
         try:
             idx = list(self.arg_mgr.arg_is_optional()).index(True)
         except ValueError:
-            idx = None
-        mandatory = self.in_args[:idx]
-        optional = self.in_args[idx:]
+            mandatory = self.in_args
+            optional = []
+        else:
+            mandatory = self.in_args[:idx]
+            optional = self.in_args[idx:]
         in_arg_str = ", ".join([x.cy_name for x in mandatory])
         if len(optional) > 0:
             in_arg_str += "[, %s]" % ", ".join([x.cy_name for x in optional])
