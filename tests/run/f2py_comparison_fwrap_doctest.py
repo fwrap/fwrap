@@ -24,6 +24,9 @@ def func_nocopy(in_, n=None, m=None):
     return result
 
 __doc__ = u"""
+Below, ## signifies that we want behaviour to differ from f2py.
+There's code in rev e92945393a21780466b90d1abe54ab662d4514f9 for
+full f2py emulation.
 
 Basic case, 2D-to-2D::
 
@@ -40,8 +43,9 @@ Pass scalar and 0-len arrays:
     array(1, dtype=int32)
     >>> func_nocopy([])
     array([], dtype=int32)
-    >>> func_nocopy([], 1, 0)
-    array([], dtype=int32)
+
+    ##>>> func_nocopy([], 1, 0)
+    ##array([], dtype=int32)
 
 
 Pass 1D arrays; shape gets padded with 1-dims on right side::
@@ -53,44 +57,44 @@ Pass 1D arrays; shape gets padded with 1-dims on right side::
     >>> raises_error(func, [0,0,0], 1, 3)
     True
 
-Pass array > 2D, temporarily viewed as (2,3) internally::
+## Pass array > 2D, temporarily viewed as (2,3) internally::
 
-    >>> a = np.array([[[
-    ...    [[  [[0]],  [[0]],  [[0]]  ]],
-    ...    [[  [[0]],  [[0]],  [[0]]  ]],
-    ... ]]], dtype=np.int32, order='F')
-    >>> r = func_nocopy(a)
-    >>> a.shape
-    (1, 1, 2, 1, 3, 1, 1)
-    >>> r.shape
-    (1, 1, 2, 1, 3, 1, 1)
-    >>> a.ravel()
-    array([1, 2, 3, 4, 5, 6], dtype=int32)
-    >>> r.ravel()
-    array([1, 2, 3, 4, 5, 6], dtype=int32)
+##     >>> a = np.array([[[
+##     ...    [[  [[0]],  [[0]],  [[0]]  ]],
+##     ...    [[  [[0]],  [[0]],  [[0]]  ]],
+##     ... ]]], dtype=np.int32, order='F')
+##     >>> r = func_nocopy(a)
+##     >>> a.shape
+##     (1, 1, 2, 1, 3, 1, 1)
+##     >>> r.shape
+##     (1, 1, 2, 1, 3, 1, 1)
+##     >>> a.ravel()
+##     array([1, 2, 3, 4, 5, 6], dtype=int32)
+##     >>> r.ravel()
+##     array([1, 2, 3, 4, 5, 6], dtype=int32)
 
 
-Require flattening of dimension; (2,2,2) treated as (2,2,4)::
+## Require flattening of dimension; (2,2,2) treated as (2,2,4)::
 
-    >>> a = [[0,0],[0,0]]
-    >>> b = [a, a]
-    >>> func_nocopy(b)
-    array([[[1, 3],
-            [2, 4]],
-    <BLANKLINE>
-           [[5, 7],
-            [6, 8]]], dtype=int32)
-    >>> func_nocopy(b, 2, 4)
-    array([[[1, 3],
-            [2, 4]],
-    <BLANKLINE>
-           [[5, 7],
-            [6, 8]]], dtype=int32)
+##     >>> a = [[0,0],[0,0]]
+##     >>> b = [a, a]
+##     >>> func_nocopy(b)
+##     array([[[1, 3],
+##             [2, 4]],
+##     <BLANKLINE>
+##            [[5, 7],
+##             [6, 8]]], dtype=int32)
+##     >>> func_nocopy(b, 2, 4)
+##     array([[[1, 3],
+##             [2, 4]],
+##     <BLANKLINE>
+##            [[5, 7],
+##             [6, 8]]], dtype=int32)
 
-    >>> raises_error(func, b, 2, 3)
-    True
-    >>> raises_error(func, b, 4, 2)
-    True
+##     >>> raises_error(func, b, 2, 3)
+##     True
+##     >>> raises_error(func, b, 4, 2)
+##     True
 
 Out arrays and argument positions::
 

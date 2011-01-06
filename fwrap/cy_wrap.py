@@ -1235,6 +1235,12 @@ as_fortran_array_f2pystyle_utility_code = u"""
 cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy,
                               int alignment=1):
     cdef int flags = np.NPY_F_CONTIGUOUS | np.NPY_FORCECAST
+    cdef np.npy_intp out_shape[np.NPY_MAXDIMS]
+    cdef np.PyArray_Dims out_dims
+    cdef np.ndarray result
+    cdef np.npy_intp * in_shape
+    cdef int in_ndim
+    cdef int i
     if ndim <= 1:
         # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
         flags |= np.NPY_C_CONTIGUOUS
@@ -1245,50 +1251,21 @@ cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy,
     if copy:
         flags |= np.NPY_ENSURECOPY
     result = np.PyArray_FROMANY(value, typenum, 0, 0, flags)
-
-    if ndim == result.ndim:
+    in_ndim = np.PyArray_NDIM(result)
+    if in_ndim == ndim:
         return result, result
+    elif in_ndim > ndim:
+        raise ValueError("Dimension of array must be <= %d" % ndim)
     else:
-        to_shape = [None] * ndim
-        fw_f2py_shape_coercion(ndim, to_shape, result.ndim, result.shape,
-                               result.size)
-        return result.reshape(to_shape, order='F'), result
-
-cdef object fw_f2py_shape_coercion(int to_ndim, object to_shape,
-                                   int from_ndim, object from_shape,
-                                   Py_ssize_t from_size):
-    # Logic ported from check_and_fix_dimensions in fortranobject.c
-    # Todo: optimize
-    if to_ndim > from_ndim:
-        to_size = 1
-        free_ax = -1
-        for i in range(from_ndim):
-            d = from_shape[i]
-            if d == 0:
-                d = 1
-            to_shape[i] = d
-            to_size *= d
-        for i in range(from_ndim, to_ndim):
-            if free_ax < 0:
-                free_ax = i
-            else:
-                to_shape[i] = 1
-        if free_ax >= 0:
-            to_shape[free_ax] = from_size // to_size
-    elif to_ndim < from_ndim:
-        j = 0
-        for i in range(from_ndim):
-            while j < from_ndim and from_shape[j] < 2:
-                j += 1
-            if j >= from_ndim:
-                d = 1
-            else:
-                d = from_shape[j]
-                j += 1
-            if i < to_ndim:
-                to_shape[i] = d
-            else:
-                to_shape[to_ndim - 1] *= d
+        # Make view where shape is padded with ones on right side
+        in_shape = np.PyArray_DIMS(result)
+        for i in range(in_ndim):
+            out_shape[i] = in_shape[i]
+        for i in range(in_ndim, ndim):
+            out_shape[i] = 1
+        out_dims.ptr = out_shape
+        out_dims.len = ndim
+        return np.PyArray_Newshape(result, &out_dims, np.NPY_FORTRANORDER), result
 """
 
 
