@@ -962,7 +962,8 @@ class CyProcedure(AstNode):
         return self.all_dtypes_list # TODO: Generate this instead
 
     def cy_prototype(self, cfg, in_pxd=True):
-        template = "cpdef api object %(proc_name)s(%(arg_list)s)"
+        api = '' if cfg.f77binding else 'api '
+        template = "cpdef %s object %%(proc_name)s(%%(arg_list)s)" % api
         # Need to use default values only for trailing arguments
         # Currently, no reordering is done, one simply allows
         # trailing arguments that have defaults (explicit-shape,
