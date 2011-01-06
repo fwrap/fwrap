@@ -104,6 +104,12 @@ C configure-flags: --f77binding
       endif
       end function
 
+      subroutine withstring(n, s)
+      integer n
+      character*10 s
+      n = len(s)
+      end subroutine
+
 
 C TODO: Does not work
 c$$$      logical function lsame(ca,cb)

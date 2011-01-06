@@ -231,6 +231,9 @@ class _CyArgBase(AstNode):
                                                      'name', 'cy_name')])
         return result
 
+    def trailing_call_arg_list(self, ctx):
+        return []
+
     def is_optional(self):
         return (self.cy_default_value is not None or self.pyf_default_value is not None)
 
@@ -384,6 +387,13 @@ class _CySingleCharArg(_CyArg):
     def call_arg_list(self, ctx):
         return ["%s" % self.buf_name]
 
+    def trailing_call_arg_list(self, ctx):
+        if ctx.cfg.f77binding:
+            # See f77_wrap.py
+            return ["1"]
+        else:
+            return []
+
     def return_tuple_list(self, ctx):
         return [self.buf_name]
 
@@ -460,11 +470,22 @@ class _CyStringArg(_CyArg):
                     (self.intern_name, self.intern_len_name)
 
     def call_arg_list(self, ctx):
+        args = []
+        if not ctx.cfg.f77binding:
+            # See f77_wrap.py
+            args.append('&%s' % self.intern_len_name)
         if self.intent == 'in':
-            return ['&%s' % self.intern_len_name,
-                    '<char*>%s' % self.intern_name]
+            args.append('<char*>%s' % self.intern_name)
         else:
-            return ['&%s' % self.intern_len_name, self.intern_buf_name]
+            args.append(self.intern_buf_name)
+        return args
+
+    def trailing_call_arg_list(self, ctx):
+        if ctx.cfg.f77binding:
+            # See f77_wrap.py
+            return [self.intern_len_name]
+        else:
+            return []
 
     def return_tuple_list(self, ctx):
         if self.intent in ('out', 'inout', None):
@@ -859,6 +880,8 @@ class CyArgManager(object):
         cal = []
         for arg in self.call_args:
             cal.extend(arg.call_arg_list(ctx))
+        for arg in self.call_args:
+            cal.extend(arg.trailing_call_arg_list(ctx))
         return cal
 
     def arg_declarations(self):

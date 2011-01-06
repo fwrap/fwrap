@@ -98,5 +98,12 @@ __doc__ = u'''
     (10, 1)
     >>> logicalfunc(MyFalse())
     (0, 0)
-    
+
+
+Strings::
+
+    >>> withstring(10, 'a' * 10)
+    (10, 'aaaaaaaaaa')
+    >>> withstring(10, 'a' * 8)[0]
+    10
 '''

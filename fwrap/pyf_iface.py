@@ -194,6 +194,9 @@ cdef extern from "string.h":
         else:
             return self.type
 
+    def c_declaration(self):
+        return 'char *'
+
     odecl = property(_get_odecl)
 
 

@@ -3,6 +3,15 @@
 # All rights reserved. See LICENSE.txt.
 #------------------------------------------------------------------------------
 
+# ABI used: We basically do the same as f2py. Incomplete list of
+# what that means:
+#
+# Strings: Add trailing length arguments for all string
+# arguments. Also the ones with fixed size (we simply copy what f2py
+# does here for optimal compiler compatability; some additional
+# arguments on the stack apparently does not hurt)
+
+
 from fwrap import pyf_iface as pyf
 from fwrap import constants
 from fwrap import f77_config
@@ -80,6 +89,14 @@ def get_arg_type(arg):
     else:
         return arg.c_type()
 
+def get_arg_declarations(proc):
+    decls = ["%s %s" % (get_arg_type(arg), arg.name)
+             for arg in proc.args]
+    decls += ["size_t %s_len_" % arg.name
+              for arg in proc.args
+              if isinstance(arg.dtype, pyf.CharacterType)]
+    return ", ".join(decls)
+
 #
 # _fc.h generation
 #
@@ -124,15 +141,14 @@ class GenerateFcHeader(Generator):
         self.putln('#endif')
 
     def procedure_declaration(self, proc):
-        decls = ["%s %s" % (get_arg_type(arg), arg.name)
-                 for arg in proc.args]
-        argstr = (", ".join(decls) if len(decls) > 0 else 'void')
+        argstr = get_arg_declarations(proc)
+        if len(argstr) == 0:
+            argstr = 'void'
         if proc.pyf_wraps_c:
             self.putln("FORTRAN_CALLSPEC %s %s(%s);" % (
                 proc.get_return_c_type(),
                 proc.name,
-                argstr))
-            
+                argstr))            
         else:
             self.putln("FORTRAN_CALLSPEC %s F_FUNC(%s,%s)(%s);" % (
                 proc.get_return_c_type(),
@@ -171,9 +187,8 @@ class GenerateFcPxd(Generator):
         self.dedent()
 
     def procedure_declaration(self, proc):
-        decls = ["%s %s" % (get_arg_type(arg), _py_kw_mangler(arg.name))
-                 for arg in proc.args]        
+        argstr = get_arg_declarations(proc)
         self.putln("%s %s(%s)" % (
             proc.get_return_c_type(),
             proc.name,
-            ", ".join(decls)))
+            argstr))
