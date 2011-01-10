@@ -58,6 +58,8 @@ def generate_fc_h(ast, ktp_header_name, buf, cfg):
 
 def generate_interface(proc, buf, cfg, gmn=constants.KTP_MOD_NAME):
     if cfg.f77binding:
+        if proc.kind == 'function':
+            buf.putln(proc.return_arg.declaration(cfg))
         buf.putln('external %s' % proc.name)
     else:
         buf.putln('interface')
@@ -93,6 +95,7 @@ class FcProcedure(object):
         self.arg_man = None
         self._get_arg_man()
         self.pyf_callstatement = wrapped.pyf_callstatement
+        self.pyf_wraps_c = wrapped.pyf_wraps_c
         self.language = wrapped.language
         self.kind = wrapped.kind
 
@@ -518,16 +521,14 @@ class FcArrayArg(FcArg):
         # NumPy array
         ck = []
         assert len(arg_dims) == len(buf_dims)
-        if len(arg_dims) == 1:
-            arg_dim, = arg_dims
-            buf_dim, = buf_dims
+        ndim = len(arg_dims)
+        for idx, (arg_dim, buf_dim) in enumerate(zip(arg_dims, buf_dims)):
             if arg_dim.is_explicit_shape and buf_dim.is_explicit_shape:
-                # Truncation of array is allowed
-                ck.append('%s .lt. 0 .or. %s .gt. %s' %
-                          (arg_dim.sizeexpr, arg_dim.sizeexpr, buf_dim.sizeexpr))
-        else:
-            for arg_dim, buf_dim in zip(arg_dims, buf_dims):
-                if arg_dim.is_explicit_shape and buf_dim.is_explicit_shape:
+                if idx == ndim - 1:
+                    # Truncation of array is allowed
+                    ck.append('%s .lt. 0 .or. %s .gt. %s' %
+                              (arg_dim.sizeexpr, arg_dim.sizeexpr, buf_dim.sizeexpr))
+                else:
                     ck.append('%s .ne. %s' % (arg_dim.sizeexpr, buf_dim.sizeexpr))
         return ' .or. '.join(ck)
 
@@ -565,13 +566,14 @@ class FcScalarPtrArg(FcArg):
 
     def get_call_name(self, cfg):
         if cfg.f77binding:
-            return self.name
+            FcArg._set_intern_name(self)
+            return FcArg.get_call_name(self, cfg)
         else:
             return self.intern_name
 
     def pre_call_code(self, cfg):
         if cfg.f77binding:
-            return []
+            return FcArg.pre_call_code(self, cfg)
         else:
             return ['call c_f_pointer(%s, %s)' %
                     (self.extern_arg.name,
@@ -579,11 +581,8 @@ class FcScalarPtrArg(FcArg):
 
     def extern_declarations(self, cfg):
         if cfg.f77binding:
-            f77_extern_var = pyf.Var(name=self.name,
-                                     dtype=self.intern_dtype,
-                                     isptr=False)
-            return [self.len_arg.declaration(cfg),
-                    f77_extern_var.declaration(cfg)]
+            FcArg._set_extern_args(self)
+            return FcArg.extern_declarations(self, cfg)
         else:
             return super(FcScalarPtrArg, self).extern_declarations(cfg)
 

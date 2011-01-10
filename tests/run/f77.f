@@ -1,3 +1,4 @@
+C configure-flags: --f77binding
 
       subroutine int_default(i1,i2,i3)
       implicit none
@@ -84,6 +85,31 @@
         character, intent(out) :: x
         x = 'F'
       end subroutine
+
+      subroutine onedee(n, x)
+      integer n, i
+      integer x(n)
+      do i = 1, n
+         x(i) = i
+      enddo
+      end subroutine
+
+      function logicalfunc(x)
+      logical x
+      integer logicalfunc
+      if (x) then
+         logicalfunc = 10
+      else 
+         logicalfunc = 0
+      endif
+      end function
+
+      subroutine withstring(n, s)
+      integer n
+      character*10 s
+      n = len(s)
+      end subroutine
+
 
 C TODO: Does not work
 c$$$      logical function lsame(ca,cb)

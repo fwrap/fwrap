@@ -25,8 +25,8 @@ def _py_kw_mangler(name):
         # Cython keywords
         'include', 'ctypedef', 'cdef', 'cpdef',
         'cimport', 'by',
-        # We always cimport numpy as np
-        'np'
+        # Global imports
+        'np', 'fc'
         )
     if name.lower() in kwds:
         return "%s__" % name
@@ -134,6 +134,9 @@ class Dtype(object):
     def all_dtypes(self):
         return [self]
 
+    def c_declaration_byval(self):
+        return self.fw_ktp
+
     def c_declaration(self):
         return "%s *" % self.fw_ktp
 
@@ -190,6 +193,9 @@ cdef extern from "string.h":
             return "%s(%s)" % (self.type, ', '.join(sel))
         else:
             return self.type
+
+    def c_declaration(self):
+        return 'char *'
 
     odecl = property(_get_odecl)
 
@@ -362,6 +368,9 @@ class _NamedType(object):
         orig = cfg.fc_wrapper_orig_types
         return '%s :: %s' % ( ', '.join(self.var_specs(orig)), self.name)
 
+    def c_type_byval(self):
+        return self.dtype.c_declaration_byval()
+
     def c_type(self):
         return self.dtype.c_declaration()
 
@@ -523,10 +532,13 @@ class Argument(AstNode):
 
     pyf_hide = False
     pyf_default_value = None
-    pyf_check = ()
+    pyf_check = []
+    pyf_depend = []
     pyf_overwrite_flag = False
     pyf_overwrite_flag_default = None
     pyf_optional = False
+    pyf_align = None
+    pyf_by_value = False
 
     def _update(self):
         self._var = Var(name=self.name, dtype=self.dtype,
@@ -559,6 +571,10 @@ class Argument(AstNode):
         if self.intent and not self.is_return_arg:
             return ['intent(%s)' % self.intent]
         return []
+
+    def c_type_byval(self):
+        assert self.dimension is None
+        return self._var.c_type_byval()
 
     def c_type(self):
         return self._var.c_type()
@@ -605,14 +621,14 @@ class ArgManager(object):
 
         pnames = set([p.name for p in self._params])
         name2o = dict([(o.name, o) for o in (self._args + self._params)])
-        queue = set(self._args[:])
+        queue = self._args[:]
         while queue:
             o = queue.pop()
             for depname in o.depends():
                 dep = name2o[depname]
                 if depname in name2o:
                     # Make sure we get all dependencies in the tree.
-                    queue.add(dep)
+                    queue.append(dep)
                 if depname in pnames:
                     # The parameter is required as part of an argument
                     # declaration, so remove it from pnames.
@@ -697,6 +713,7 @@ class Procedure(AstNode):
     language = 'fortran'
     kind = None
     pyf_callstatement = None
+    pyf_wraps_c = False
 
     def _validate(self, name, language, **kw):
         assert language in ('fortran', 'pyf')
@@ -737,12 +754,17 @@ class Function(Procedure):
                             return_arg=self.return_arg,
                             params=self.params)
 
+    def get_return_c_type(self):
+        return self.return_arg.dtype.fw_ktp
+
 class Subroutine(Procedure):
     kind = 'subroutine'
 
     def _update(self):
         self.arg_man = ArgManager(self.args, params=self.params)
 
+    def get_return_c_type(self):
+        return 'void'
 
 class Module(object):
 

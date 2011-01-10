@@ -2,7 +2,7 @@
 ! Make sure that the one with templates run last, so that the result
 ! can be inspected in BUILD.
 ! configure-flags:
-! configure-flags: --detect-templates
+! configure-flags: --detect-templates --template=apple,orange
 
 subroutine s_differ_in_number(x)
   integer :: x
@@ -70,22 +70,42 @@ end subroutine
 ! single, non-array argument
 !
 
-subroutine slass(x)
-  real, intent(inout) :: x
+subroutine slass(sx, flag)
+  implicit none
+  real, intent(inout) :: sx
+  character, intent(in) :: flag
+  sx = sx * 2
+end subroutine
+
+subroutine dlass(dx, flag)
+  implicit none
+  double precision, intent(inout) :: dx
+  character, intent(in) :: flag
+  dx = dx * 2
+end subroutine
+
+subroutine class(cx, flag)
+  implicit none
+  complex, intent(inout) :: cx
+  character, intent(in) :: flag
+  cx = cx * 2
+end subroutine
+
+subroutine zlass(zx, flag)
+  implicit none
+  double complex, intent(inout) :: zx
+  character, intent(in) :: flag
+  zx = zx * 2
+end subroutine
+
+subroutine apple(x)
+  implicit none
+  real x
   x = x * 2
 end subroutine
 
-subroutine dlass(x)
-  double precision, intent(inout) :: x
-  x = x * 2
-end subroutine
-
-subroutine class(x)
-  complex, intent(inout) :: x
-  x = x * 2
-end subroutine
-
-subroutine zlass(x)
-  double complex, intent(inout) :: x
+subroutine orange(x)
+  implicit none
+  double precision x
   x = x * 2
 end subroutine

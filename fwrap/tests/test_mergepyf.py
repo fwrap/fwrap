@@ -17,7 +17,7 @@ def test_expressions():
 
     def f(s):
         print s
-        e = CToCython().translate(s)
+        e = c_to_cython(s)
         deps = list(e.requires)
         deps.sort()
         return e.template, ','.join(deps)
@@ -49,3 +49,11 @@ def test_expressions():
     eq_(f('shape(x, 1)'), ('np.PyArray_DIMS(%(x)s)[1]', 'x'))
     eq_(f('abs(x)'), ('abs(%(x)s)', 'x'))
     eq_(f('incx==1||incx==-1'), ('(%(incx)s == 1) or (%(incx)s == -1)', 'incx'))
+    eq_(f('x % (4 / 2)'), ('%(x)s %% (4 // 2)', 'x'))
+
+def test_callstatement():
+    eq_(parse_callstatement('{int i=2*kl+ku+1;(*f2py_func)(&n,&kl,&ku);for(i=0;i<n;--piv[i++]);}'),
+        ('int i=2*kl+ku+1;', 'for(i=0;i<n;--piv[i++])', '&n,&kl,&ku'))
+    eq_(parse_callstatement('(*f2py_func)(&x, &y)'), (None, None, '&x, &y'))
+    eq_(parse_callstatement('{ { (*f2py_func)(&x, &y) }; ;; }'), (None, None, '&x, &y'))
+    

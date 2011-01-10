@@ -156,6 +156,9 @@ class AstNode(object):
 
     def __ne__(self, other):
         return not self == other
+
+    def __hash__(self):
+        raise RuntimeError('AstNode is not immutable')
     
     def equal_attributes(self, other, attributes):
         for attrname in attributes:

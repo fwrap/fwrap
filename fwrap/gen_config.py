@@ -91,7 +91,6 @@ def get_pxd_cimports(ctps):
     return blocks
 
 def write_header(ctps, fbuf):
-
     def write_err_codes(h_out):
         for err_name in sorted(constants.ERR_CODES):
             h_out.write("#define %s %d\n" % \

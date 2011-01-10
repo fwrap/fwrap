@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
-import os, sys, re, shutil, unittest, doctest
+import os, sys, re, shutil, unittest, doctest, contextlib
+from StringIO import StringIO
 
 WITH_CYTHON = True
 
@@ -18,6 +19,25 @@ def parse_testcase_flag_sets(filename):
     if len(result) == 0:
         result = [[]]
     return result
+
+@contextlib.contextmanager
+def process_args_as(argv):
+    # For calling f2py...
+    old = sys.argv
+    try:
+        sys.argv = sys.argv[0:1] + argv
+        yield
+    finally:
+        sys.argv = old
+
+@contextlib.contextmanager
+def working_directory(path):
+    old = os.getcwd()
+    try:
+        os.chdir(path)
+        yield
+    finally:
+        os.chdir(old)
 
 class FwrapTestBuilder(object):
     def __init__(self, rootdir, workdir, selectors, exclude_selectors,
@@ -69,15 +89,20 @@ class FwrapTestBuilder(object):
                 test_class = FwrapCompileTestCase
             flag_sets = parse_testcase_flag_sets(os.path.join(path, filename))
             for extra_flags in flag_sets:
-                suite.addTest(self.build_test(test_class, path, workdir, filename, extra_flags))
+                use_f2py = '--f2py-comparison' in extra_flags
+                if use_f2py:
+                    extra_flags = [x for x in extra_flags if x != '--f2py-comparison']
+                suite.addTest(self.build_test(test_class, path, workdir, filename, extra_flags,
+                                              use_f2py=use_f2py))
         return suite
 
-    def build_test(self, test_class, path, workdir, filename, extra_flags):
+    def build_test(self, test_class, path, workdir, filename, extra_flags, use_f2py):
         return test_class(path, workdir, filename,
-                cleanup_workdir=self.cleanup_workdir,
-                cleanup_sharedlibs=self.cleanup_sharedlibs,
-                verbosity=self.verbosity,
-                configure_flags=self.configure_flags + extra_flags)
+                          cleanup_workdir=self.cleanup_workdir,
+                          cleanup_sharedlibs=self.cleanup_sharedlibs,
+                          verbosity=self.verbosity,
+                          configure_flags=self.configure_flags + extra_flags,
+                          use_f2py=use_f2py)
 
 class _devnull(object):
 
@@ -90,7 +115,7 @@ class _devnull(object):
 class FwrapCompileTestCase(unittest.TestCase):
     def __init__(self, directory, workdir, filename,
             cleanup_workdir=True, cleanup_sharedlibs=True,
-            verbosity=0, configure_flags=()):
+            verbosity=0, configure_flags=(), use_f2py=False):
         self.directory = directory
         self.workdir = workdir
         self.filename = filename
@@ -98,6 +123,7 @@ class FwrapCompileTestCase(unittest.TestCase):
         self.cleanup_sharedlibs = cleanup_sharedlibs
         self.verbosity = verbosity
         self.configure_flags = configure_flags
+        self.use_f2py = use_f2py
         unittest.TestCase.__init__(self)
 
     def shortDescription(self):
@@ -127,14 +153,23 @@ class FwrapCompileTestCase(unittest.TestCase):
             os.makedirs(self.workdirs)
 
     def runTest(self):
-        # fwrapc.py configure build fsrc...
-        self.projname = os.path.splitext(self.filename)[0] + '_fwrap'
-        self.projdir = os.path.join(self.workdir, self.projname)
+        base = os.path.splitext(self.filename)[0]
+        self.projname = base + '_fwrap'
+        self.projdir = os.path.join(self.workdir, base + ('_f2py' if self.use_f2py else '_fwrap'))
         fq_fname = os.path.join(os.path.abspath(self.directory), self.filename)
-        source_files = [fq_fname]
         pyf_file = '%s.pyf' % os.path.splitext(fq_fname)[0]
+        if not os.path.exists(pyf_file):
+            pyf_file = None
+        source_files = [fq_fname]
+        if self.use_f2py:
+            self.compile_f2py(source_files, pyf_file)
+        else:
+            self.compile_fwrap(source_files, pyf_file)
+
+    def compile_fwrap(self, source_files, pyf_file):
+        # fwrapc.py configure build fsrc...
         conf_flags = self.configure_flags
-        if os.path.exists(pyf_file):
+        if pyf_file is not None:
             conf_flags.append('--pyf=%s' % pyf_file)
         argv = ['configure'] + conf_flags + ['build',
                 '--name=%s' % self.projname,
@@ -142,6 +177,30 @@ class FwrapCompileTestCase(unittest.TestCase):
         argv += source_files
         argv += ['install']
         fwrapc(argv=argv)
+
+    def compile_f2py(self, source_files, pyf_file):
+        from numpy.f2py.f2py2e import main as f2pymain
+        assert pyf_file is not None
+        assert len(source_files) == 1
+        f_file = source_files[0]
+        os.makedirs(self.projdir)
+        shutil.copy(f_file, self.projdir)
+        shutil.copy(pyf_file, self.projdir)
+        print 'Calling f2py... (see runtests.py for getting hold of output)'
+        oldpipes = sys.stdout, sys.stderr
+        try:
+            sys.stdout = StringIO()
+            sys.stderr = StringIO()
+            opts = ['--no-wrap-functions']
+            with working_directory(self.projdir):
+                # Invoke just to create C file, for inspection
+                with process_args_as(opts + [pyf_file]):
+                    f2pymain()
+                # Compile all the way to .so
+                with process_args_as(opts + ['-c', pyf_file, f_file]):
+                    f2pymain()
+        finally:
+            sys.stdout, sys.stderr = oldpipes
 
     def compile(self, directory, filename, workdir, incdir):
         self.run_wrapper(directory, filename, workdir, incdir)
@@ -152,7 +211,10 @@ class FwrapCompileTestCase(unittest.TestCase):
 
 class FwrapRunTestCase(FwrapCompileTestCase):
     def shortDescription(self):
-        return "compiling and running %s" % self.filename
+        result = "compiling and running %s" % self.filename
+        if self.use_f2py:
+            result += " (f2py mode)"
+        return result
 
     def run(self, result=None):
         if result is None:
@@ -165,8 +227,16 @@ class FwrapRunTestCase(FwrapCompileTestCase):
                 sys.path.insert(0, self.projdir)
             doctest_mod_base = self.projname+'_doctest'
             doctest_mod_fqpath = os.path.join(self.directory, doctest_mod_base+'.py')
-            shutil.copy(doctest_mod_fqpath, self.projdir)
-            doctest.DocTestSuite(self.projname+'_doctest').run(result) #??
+            testname = self.projname + '_doctest' + ('_f2py' if self.use_f2py else '')
+            assert os.path.isdir(self.projdir)
+            shutil.copyfile(doctest_mod_fqpath, os.path.join(self.projdir, testname) + '.py')
+
+            try:
+                os.environ['F2PY'] = str(int(self.use_f2py))
+                doctest.DocTestSuite(testname).run(result) #??
+            finally:
+                del os.environ['F2PY']
+                
         except Exception:
             result.addError(self, sys.exc_info())
             result.stopTest(self)

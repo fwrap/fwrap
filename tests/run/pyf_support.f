@@ -1,10 +1,11 @@
+C configure-flags: --f77binding
 
       subroutine testone(m_hidden, m, n, arr)
       implicit none
 C     Assert that m_hidden == m + 1.
 C     Then do arr = arange(m*n).reshape(m, n)
       integer :: m_hidden, m, n, i, j, idx
-      real*8 :: arr(1:m_hidden, 1:n)
+      real*8 :: arr(m_hidden, n)
       if (m_hidden /= m + 1) then
          write (*,*) 'assumption failed in pyf_support.f'
          arr = 0
@@ -103,3 +104,29 @@ C     Then do arr = arange(m*n).reshape(m, n)
       integer y
       a_function = 13 + y
       end function
+
+      subroutine sdefault(z)
+      real z
+      z = z * 2
+      end subroutine
+
+      subroutine cdefault(z)
+      complex z
+      z = z * 2
+      end subroutine
+
+      subroutine temparray(n, x, y)
+      integer x(n), y(n)
+      integer i, n
+      do i = 1, n
+         y(i) = x(i)
+      enddo
+      do i = 1, n
+         x(i) = y(i) * 2
+      enddo
+      end subroutine
+      
+      subroutine alignment(n, a, b, c)
+      integer n
+      integer*4 a(n), b(n), c(n)
+      end subroutine alignment

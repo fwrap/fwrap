@@ -11,10 +11,16 @@ from glob import glob
 from StringIO import StringIO
 from copy import copy, deepcopy
 
+# Do not change without taking backwards-compatability into account:
+CFG_LINE_HEAD = "# Fwrap:"
+self_sha1_re = re.compile(r'^%s self-sha1 (.*)$' % CFG_LINE_HEAD, re.MULTILINE)
+pyf_sha1_re = re.compile(r'^%s pyf-sha1 (.*)$' % CFG_LINE_HEAD, re.MULTILINE)
+all_sha1_re = re.compile(r'^%s (pyf|self)-sha1 (.*)$' % CFG_LINE_HEAD, re.MULTILINE)
+
 #
 # Configuration of configuration options
 #
-ATTR = object() # single attribute (e.g., git-head)
+ATTR = object() # single attribute
 LIST_ITEM = object() # repeated multiple times to form list (e.g., wraps)
 NODE = object()
 
@@ -36,15 +42,17 @@ def parse_bool(value):
     
 configuration_dom = {
     # nodetype, parser/regex, default-value, child-dom
-    'vcs' : (NODE, r'none|git', 'none', {
-        'head' : (ATTR, r'^[0-9a-f]*$', '', {}),
-        }),
+    'self-sha1' : (ATTR, r'^[0-9a-f]*$', '0' * 40, {}),
+    'pyf-sha1' : (ATTR, r'^[0-9a-f]*$', '0' * 40, {}),
     'version' : (ATTR, r'^[0-9.]+(dev_[0-9a-f]+)?$', None, {}),
     'wraps' : (LIST_ITEM, r'^.+$', None, {
         'sha1' : (ATTR, r'^[0-9a-f]*$', None, {}),
         }),
     'exclude' : (LIST_ITEM, r'^[a-zA-Z0-9_]+$', None, {}),
+    'template' : (LIST_ITEM, r'^[a-zA-Z0-9_,]+$', None, {}),
+    'template-pattern' : (LIST_ITEM, r'.*', None, {}),
     'f77binding' : (ATTR, parse_bool, False, {}),
+    'emulate-f2py' : (ATTR, parse_bool, False, {}),
     'detect-templates' : (ATTR, parse_bool, False, {}),
     'auxiliary' : (LIST_ITEM, r'^.+$', None, {}),
     }
@@ -60,6 +68,16 @@ def add_cmdline_options(add_option):
     add_option('--detect-templates', action='store_true',
                help='detect procs repeated with different types '
                'and output .pyx.in Tempita template instead of .pyx')
+    add_option('--template', type=str, action='append', metavar='NAME,NAME[,NAME,...]',
+               default=[],
+               help='comma-seperated list of routines that makes up a template '
+               '(in addition to the auto-detected ones)')
+    add_option('--template-pattern', type=str, action='append',
+               metavar='PATTERN',
+               default=[],
+               help='procs whose name match pattern make up a template')
+    add_option('--emulate-f2py', action='store_true',
+               help='go to greater lengths to behave like f2py')
     add_option('--dummy', action='store_true',
                help='dummy development configuration option')
     
@@ -68,6 +86,9 @@ def _document_from_cmdline_options(options):
     return {
         'f77binding' : options.f77binding,
         'detect-templates' : options.detect_templates,
+        'template' : [(x, {}) for x in options.template],
+        'template-pattern' : [(x, {}) for x in options.template_pattern],
+        'emulate-f2py' : options.emulate_f2py
          }
 
 #
@@ -76,8 +97,9 @@ def _document_from_cmdline_options(options):
 
 class Configuration:
     # In preferred order when serializing:
-    keys = ['version', 'vcs', 'wraps', 'exclude', 'f77binding', 'detect-templates',
-            'auxiliary']
+    keys = ['version', 'self-sha1', 'pyf-sha1', 'wraps', 'exclude',
+            'f77binding', 'detect-templates',
+            'template', 'template-pattern', 'emulate-f2py', 'auxiliary']
 
     @staticmethod
     def create_from_file(filename):
@@ -147,16 +169,6 @@ class Configuration:
     def update_version(self):
         self.document['version'] = get_version()
 
-    def set_versioned_mode(self, is_versioned):
-        if is_versioned:
-            try:
-                rev = git.cwd_rev()
-            except:
-                raise RuntimeError('Only git supported for now, this is not a git repository')
-            self.document['vcs'] = ('git', {'head': rev})
-        else:
-            self.document['vcs'] = ('none', {'head': None})
-
     def add_wrapped_file(self, pattern):
         sha1 = sha1_of_pattern(pattern)
         self.document['wraps'].append((pattern, {'sha1': sha1}))
@@ -186,19 +198,6 @@ class Configuration:
     def get_auxiliary_files(self):
         return [fname for fname, attrs in self.auxiliary]
 
-    def git_head(self):
-        if self.vcs[0] != 'git':
-            raise RuntimeError('Not in git mode')
-        return self.vcs[1]['head']
-
-    def set_vcs(self, vcs, **kw):
-        if vcs not in ('git', 'none'):
-            raise NotImplementedError()
-        for key in kw.keys():
-            if not key in ('head',):
-                raise TypeError('argument %s not understood' % key)
-        self.document['vcs'] = (vcs, kw)
-
     def get_pyx_basename(self):
         return self.wrapper_basename
 
@@ -212,8 +211,23 @@ class Configuration:
         routines = list(routines)
         routines.sort()
         self.exclude.extend([(routine, {})
-                             for routine in routines])
+                             for routine in routines
+                             if self.is_routine_included(routine)])
 
+    def get_templates(self):
+        return [x.split(',') for x, attr in self.template]
+
+    def get_template_patterns(self):
+        return [x for x, attr in self.template_pattern]
+
+    def should_emulate_f2py(self):
+        return self.emulate_f2py
+
+    def update_self_sha1(self, sha1):
+        self.document['self-sha1'] = sha1
+
+    def update_pyf_sha1(self, sha1):
+        self.document['pyf-sha1'] = sha1
 
 #
 # Utils
@@ -226,15 +240,36 @@ def expand_source_patterns(filenames):
     result.sort(key=lambda x: os.path.basename(x))
     return result
 
+def get_self_sha1(s):
+    """
+    Find a sha1 of the string s, but avoid lines storing the self-sha1
+    and pyf-sha1.
+    """
+    import hashlib
+    h = hashlib.sha1()
+    for line in s.split('\n'):
+        if all_sha1_re.match(line) is None:
+            h.update(line)
+    return h.hexdigest()
+
+def get_self_sha1_of_pyx(filename):
+    with file(filename) as f:
+        return get_self_sha1(f.read())
+
+def update_self_sha1_in_string(s, sha=None, which='self'):
+    assert which in ('self', 'pyf')
+    if sha is None:
+        sha = get_self_sha1(s)
+    p = re.compile(r'^%s %s-sha1 (.*)$' % (CFG_LINE_HEAD, which), re.MULTILINE)
+    return p.sub('%s %s-sha1 %s' % (CFG_LINE_HEAD, which, sha), s)
+
 def sha1_of_pattern(pattern):
     import hashlib
     h = hashlib.sha1()
-    print pattern
     for filename in expand_source_patterns([pattern]):
         with file(filename) as f:
             h.update(f.read())
     return h.hexdigest()    
-    
 
 def sha1_of_file(filename):
     import hashlib
@@ -346,7 +381,7 @@ def document_to_parse_tree(doc, ordered_keys):
 #
 # Parsing
 #
-fwrap_section_re = re.compile(r'^# Fwrap:(.+)$', re.MULTILINE)
+fwrap_section_re = re.compile(r'^%s(.+)$' % CFG_LINE_HEAD, re.MULTILINE)
 config_line_re = re.compile(r' (\s*)([\w-]+)(.*)$')
 
 def _parse_node(it, parent_indent, result):

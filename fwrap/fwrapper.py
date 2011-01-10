@@ -61,8 +61,10 @@ def wrap(sources, name, cfg, output_directory=None, pyf_to_merge=None):
 
     # Generate wrapper files
     created_files = generate(f_ast, name, cfg, output_directory,
-                             pyf_to_merge=pyf_to_merge)
-
+                             pyf_to_merge=pyf_to_merge,
+                             update_self_sha=True,
+                             only_pyf=(len(source_files) == 1 and
+                                       source_files[0].endswith('.pyf')))
     return created_files
     
 
@@ -81,7 +83,9 @@ def parse(source_files, cfg):
     return ast
 
 def generate(fort_ast, name, cfg, output_directory=None,
-             pyf_to_merge=None, c_ast=None, cython_ast=None):
+             pyf_to_merge=None, c_ast=None, cython_ast=None,
+             update_self_sha=True, update_pyf_sha=False,
+             only_pyf=False):
     r"""Given a fortran abstract syntax tree ast, generate wrapper files
 
     :Input:
@@ -99,30 +103,40 @@ def generate(fort_ast, name, cfg, output_directory=None,
     # logger.info("Generating abstract syntax tress for c and cython.")
     fort_ast = filter_ast(fort_ast, cfg)
     routine_names = [sub.name for sub in fort_ast]
-    if c_ast is None:
-        c_ast = fc_wrap.wrap_pyf_iface(fort_ast)
     if cython_ast is None:
-        cython_ast = cy_wrap.wrap_fc(c_ast)
+        if cfg.f77binding:
+            import f77_wrap
+            cython_ast = f77_wrap.fortran_ast_to_cython_ast(fort_ast)
+        else:
+            if c_ast is None:
+                c_ast = fc_wrap.wrap_pyf_iface(fort_ast)
+            cython_ast = cy_wrap.wrap_fc(c_ast)
 
     if pyf_to_merge is not None:
         # TODO: refactor
-        pyf_ast = parse([pyf_to_merge], cfg)
-        pyf_ast = fc_wrap.wrap_pyf_iface(pyf_ast)
-        pyf_ast = cy_wrap.wrap_fc(pyf_ast)
-        import mergepyf
+        assert cfg.f77binding
+        import f77_wrap, mergepyf
+        pyf_f_ast = parse([pyf_to_merge], cfg)
+        pyf_ast = f77_wrap.fortran_ast_to_cython_ast(pyf_f_ast)
         cython_ast = mergepyf.mergepyf_ast(cython_ast, pyf_ast)
-        
+    elif only_pyf:
+        import mergepyf
+        mergepyf.create_from_pyf_postprocess(cython_ast)
 
     # Generate files and write them out
-    generators = [ (generate_fc_f, (c_ast, name, cfg),
-                    (FC_F_TMPL_F77 if cfg.f77binding else FC_F_TMPL) % name ),
-                   (generate_fc_h, (c_ast, name, cfg), FC_HDR_TMPL % name),
-                   (generate_fc_pxd,(c_ast, name), FC_PXD_TMPL % name),
-                   (generate_cy_pxd,(cython_ast, name), CY_PXD_TMPL % name),
-                   (generate_cy_pyx,(cython_ast, name, cfg),
+    generators = [ 
+                   (generate_cy_pxd,(cython_ast, name, cfg), CY_PXD_TMPL % name),
+                   (generate_cy_pyx,(cython_ast, name, cfg, update_self_sha, update_pyf_sha),
                     (CY_PYX_IN_TMPL if cfg.detect_templates else CY_PYX_TMPL) % name) ]
     if not cfg.f77binding:
+        generators.append((generate_fc_f, (c_ast, name, cfg),
+                           (FC_F_TMPL_F77 if cfg.f77binding else FC_F_TMPL) % name ))
         generators.append((generate_type_specs, (c_ast,name), constants.TYPE_SPECS_SRC))
+        generators.append((generate_fc_h, (c_ast, name, cfg), FC_HDR_TMPL % name))
+        generators.append((generate_fc_pxd,(c_ast, name), FC_PXD_TMPL % name))
+    if cfg.f77binding:
+        generators.append((generate_f77_h, (fort_ast, name, cfg), FC_HDR_TMPL % name))
+        generators.append((generate_f77_pxd, (fort_ast, name, cfg), FC_PXD_TMPL % name))
 
     created_files = [file_name
                      for generator, args, file_name in generators]
@@ -162,16 +176,26 @@ def generate_type_specs(f_ast, name):
     gc.generate_type_specs(f_ast, buf)
     return buf
 
-def generate_cy_pxd(cy_ast, name):
+def generate_cy_pxd(cy_ast, name, cfg):
     buf = CodeBuffer()
     fc_pxd_name = (constants.FC_PXD_TMPL % name).split('.')[0]
-    cy_wrap.generate_cy_pxd(cy_ast, fc_pxd_name, buf)
+    cy_wrap.generate_cy_pxd(cy_ast, fc_pxd_name, buf, cfg)
     return buf
 
-def generate_cy_pyx(cy_ast, name, cfg):
+def generate_cy_pyx(cy_ast, name, cfg, update_self_sha, update_pyf_sha):
     buf = CodeBuffer()
     cy_wrap.generate_cy_pyx(cy_ast, name, buf, cfg)
-    return buf
+    # Add sha1 to file
+    s = buf.getvalue()
+    if update_self_sha or update_pyf_sha:
+        sha1 = configuration.get_self_sha1(s)
+        if update_self_sha:
+            cfg.update_self_sha1(sha1)
+            s = configuration.update_self_sha1_in_string(s, sha1)
+        if update_pyf_sha:
+            cfg.update_pyf_sha1(sha1)
+            s = configuration.update_self_sha1_in_string(s, sha1, 'pyf')
+    return s
 
 def generate_fc_pxd(fc_ast, name):
     buf = CodeBuffer()
@@ -195,6 +219,19 @@ def generate_fc_f(fc_ast, name, cfg):
 def generate_fc_h(fc_ast, name, cfg):
     buf = CodeBuffer()
     fc_wrap.generate_fc_h(fc_ast, constants.KTP_HEADER_SRC, buf, cfg)
+    return buf
+
+def generate_f77_h(fort_ast, name, cfg):
+    buf = CodeBuffer()
+    import f77_wrap
+    f77_wrap.generate_fc_h(fort_ast, constants.KTP_HEADER_SRC, buf, cfg)
+    return buf
+
+def generate_f77_pxd(fort_ast, name, cfg):
+    buf = CodeBuffer()
+    import f77_wrap
+    fc_header_name = constants.FC_HDR_TMPL % name
+    f77_wrap.generate_fc_pxd(fort_ast, fc_header_name, buf, cfg)
     return buf
 
 def fwrapper(use_cmdline, sources=None, **options):

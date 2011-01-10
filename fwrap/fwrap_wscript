@@ -12,6 +12,8 @@ def options(opt):
     opt.add_option('--pyf', action='store')
     opt.add_option('--f77binding', action='store_true', default=False)
     opt.add_option('--detect-templates', action='store_true', default=False)
+    opt.add_option('--template', action='append')
+    opt.add_option('--emulate-f2py', action='store_true')
     opt.load('compiler_c')
     opt.load('compiler_fc')
     opt.load('python')
@@ -43,6 +45,8 @@ def configure(conf):
     conf.env['FW_PROJ_NAME'] = conf.options.name
     conf.env['FW_F77_BINDING'] = conf.options.f77binding
     conf.env['FW_DETECT_TEMPLATES'] = conf.options.detect_templates
+    conf.env['FW_TEMPLATE'] = conf.options.template
+    conf.env['FW_EMULATE_F2PY'] = conf.options.emulate_f2py
     conf.env['FWRAPPER_OPTS'] = ''
     conf.env['FW_PYF'] = conf.options.pyf
 
@@ -62,15 +66,19 @@ def build(bld):
     cy_in_src = '%s.in' % cy_src if detect_templates else cy_src
 
     if want_f77:
-        type_specs = []
+        target = [cy_in_src]
     else:
-        type_specs = ['fwrap_type_specs.in']
+        target = ['fwrap_type_specs.in', '%s_fc.f90' % bld.env['FW_PROJ_NAME'],
+                  cy_in_src]
 
     flags = []
     if want_f77:
         flags.append('--f77binding')
     if detect_templates:
         flags.append('--detect-templates')
+    if bld.env['FW_EMULATE_F2PY']:
+        flags.append('--emulate-f2py')
+    flags.extend('--template=%s' % x for x in bld.env['FW_TEMPLATE'])
     if bld.env['FW_PYF']:
         flags.append('--pyf=%s' % bld.env['FW_PYF'])
 
@@ -79,7 +87,7 @@ def build(bld):
         rule = '${PYTHON} ${FWRAPPER} --name=%s %s ${FWRAPPER_OPTS} ${SRC}' % (
             bld.env['FW_PROJ_NAME'], ' '.join(flags)),
         source = bld.srcnode.ant_glob(['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']),
-        target = type_specs + [wrapper, cy_in_src],
+        target = target
         )
 
     if detect_templates:
@@ -112,7 +120,7 @@ def build(bld):
             after = 'generate_typemap',
             features = 'c fc pyext cshlib',
             source = bld.srcnode.ant_glob(['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']) +
-                     [cy_src, wrapper],
+                     [cy_src],
             target = bld.env['FW_PROJ_NAME'],
             use = 'fcshlib CLIB NUMPY',
             includes = ['.'],

@@ -35,3 +35,15 @@
         ano(:,1:n2) = ainout(:,1:n2)
         ainout(:,1:n2) = ain(:,1:n2) + ano(:,1:n2)
       end subroutine assumed_size
+
+      subroutine fixed_size(ain, aout, ainout, ano)
+        implicit none
+        integer, dimension(3, 4), intent(in) :: ain
+        integer, dimension(3, 4), intent(out) :: aout
+        integer, dimension(3, 4), intent(inout) :: ainout
+        integer, dimension(3, 4) :: ano
+
+        aout(:,:) = ain(:,:)
+        ano(:,:) = ainout(:,:)
+        ainout(:,:) = ain(:,:) + ano(:,:)
+      end subroutine fixed_size

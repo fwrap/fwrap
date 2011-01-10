@@ -3,8 +3,9 @@ python module pyf_support
         subroutine testone(m_hidden, m, n, arr)
             integer intent(hide), depend(m) :: m_hidden=m+1
             integer intent(in), check((m>=1) && (m_hidden <= 10)) :: m
-            integer intent(in), check(n>=2) :: n = 2
-            real*8 intent(out),dimension(1:m_hidden,1:n),depend(m_hidden,n) :: arr
+            integer intent(in) :: n = 2
+            real*8 intent(out),dimension(m_hidden,n),depend(m_hidden,n) :: arr
+            check(n>=2) :: arr
         end subroutine
 
 
@@ -13,7 +14,7 @@ python module pyf_support
             ! The in,out of f2py corresponds to the "inout" of fwrap.
             ! The "inout" of f2py is not supported
             integer intent(in,out) :: xp, zp
-            integer intent(in,out) :: yp(5)
+            integer intent(in,out) :: yp(4)
         end subroutine
 
         function fort_sum_simple(n, arr) result(x)
@@ -58,8 +59,6 @@ python module pyf_support
           integer intent(hide) :: b = c + 1
           callstatement (*f2py_func)(&aux_arg, &b, (b>10)?"A":"B")
         end function
-
-
         
         subroutine a_function(y, x)
           ! Function masquerading as subroutine in pyf
@@ -67,6 +66,29 @@ python module pyf_support
           integer, intent(in,out) :: y
           callstatement (*f2py_func)(&x, &y)
         end subroutine
+
+        subroutine sdefault(z)
+          real, intent(in,out) :: z = 1.
+        end subroutine
+
+        subroutine cdefault(z)
+          complex, intent(in,out) :: z = (1., 0.)
+        end subroutine
+
+
+        subroutine temparray(n, x, y)
+          integer, dimension(n) :: x, y
+          intent(in,out) :: x
+          intent(hide) :: y
+          integer :: n
+        end subroutine temparray
+
+        subroutine alignment(n, a, b, c)
+          integer :: n
+          integer*4, dimension(n), intent(in,out,overwrite) :: a, b, c
+          intent(aligned8) :: b
+          intent(aligned16) :: c
+        end subroutine alignment
 
     end interface 
 end python module pyf_support

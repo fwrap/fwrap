@@ -186,7 +186,10 @@ class CodeSnippet(object):
     def put(self, block, *args, **kw):
         block = dedent(block)
         block = _format(block, *args, **kw)
-        self.lines.extend(block.split('\n'))
+        lines = block.split('\n')
+        if len(lines[-1]) == 0:
+            del lines[-1]
+        self.lines.extend(lines)
 
     def __eq__(self, other):
         if self is other:
@@ -251,13 +254,16 @@ def emit_code_snippets(snippets, buf=None):
 class DependencyException(Exception):
     pass
 
+WHITE, GRAY, BLACK = object(), object(), object()
+
 def topological_sort(input_nodes):
     result = []
-    been_visited = set()
+    colors = {}
 
     def visit(node):
-        if node.provides not in been_visited:
-            been_visited.add(node.provides)
+        color = colors.get(node.provides, WHITE)
+        if color == WHITE:
+            colors[node.provides] = GRAY
             # Visit the requirements in the order given in the
             # original input array (stable ordering).  This increases
             # complexity, but we will only use this code for tens of
@@ -272,11 +278,16 @@ def topological_sort(input_nodes):
                 raise DependencyException('Node(s) not present: %s' % ', '.join(
                     repr(x) for x in requires))
             result.append(node)
+            colors[node.provides] = BLACK
+        elif color == GRAY:
+            raise DependencyException('Infinite loop (revisited %s)' % node.provides)
             
 
     leafs = find_leafs(input_nodes)
     for leaf in leafs:
         visit(leaf)
+    if len(result) != len(input_nodes):
+        raise DependencyException('Infinite loop (not enough leaf nodes)')
         
     return result
 

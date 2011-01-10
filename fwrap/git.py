@@ -13,7 +13,8 @@ def execproc(cmd, get_err=False):
     err = pp.stderr.read()
     retcode = pp.wait()
     if retcode != 0:
-        raise RuntimeError('Return code %d: %s' % (retcode, ' '.join(cmd)))
+        raise RuntimeError('Return code %d: %s\nError log:\n%s' % (retcode, ' '.join(cmd),
+                                                                   err))
     if get_err:
         return result, err
     else:
@@ -65,8 +66,13 @@ def add(files):
     assert not isinstance(files, str)
     execproc(['git', 'add'] + list(files))
 
-def commit(message):
+def commit(message, to_add=None):
+    if to_add is not None:
+        add(to_add)
     execproc(['git', 'commit', '-m', message])
+
+def branch(name, rev):
+    execproc(['git', 'branch', name, rev])
 
 def create_temporary_branch(start_point, prefix):
     # TODO: Ensure/make this work on localized systems
@@ -95,3 +101,23 @@ def children_of_commit(rev):
 def get_commit_title(rev):
     lines = execproc(['git', 'show', '--raw', '--format=format:%s', rev]).split('\n')
     return lines[0]
+
+def blame_for_regex(filename, regex):
+    out = execproc(['git', 'blame', '--porcelain', '-l',
+                    '-L', '/%s/,+1' % regex, filename])
+    rev, origline, finalline, n = out.split('\n')[0].split()
+    return rev
+
+def merge(branch):
+    execproc(['git', 'merge', branch])
+
+def delete_branch(branch):
+    orig_branch = current_branch()
+    try:
+        checkout(branch)
+    except RuntimeError:
+        return
+    else:
+        checkout(orig_branch)
+        execproc(['git', 'branch', '-D', branch])
+

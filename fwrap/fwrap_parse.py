@@ -40,13 +40,13 @@ def _process_node(node, ast, language):
         else:
             args = _get_args(child, language)
             params = _get_params(child, language)
-            callstatement = _get_callstatement(child, language)
             kw = dict(
                 name=child.name,
                 args=args,
                 params=params,
-                language=language,
-                pyf_callstatement=callstatement)
+                language=language)
+            if language == 'pyf':
+                kw.update(_get_pyf_proc_annotations(child))
             if child.blocktype == 'subroutine':
                 ast.append(pyf.Subroutine(**kw))
             elif child.blocktype == 'function':
@@ -92,7 +92,7 @@ def _get_arg(p_arg, language):
     dtype = _get_dtype(p_typedecl, language)
     name = p_arg.name
     if language == 'pyf':
-        intent, pyf_annotations = _get_pyf_annotations(p_arg)
+        intent, pyf_annotations = _get_pyf_arg_annotations(p_arg)
     else:
         intent = _get_intent(p_arg, language)
         pyf_annotations = {}
@@ -177,13 +177,6 @@ def _get_params(proc, language):
             params.append(_get_param(var, language))
     return params
 
-def _get_callstatement(proc, language):
-    from fparser.statements import CallStatement
-    for line in proc.content:
-        if isinstance(line, CallStatement):
-            return line.expr
-    return None
-
 def _get_intent(arg, language):
     assert language != 'pyf'
     intents = []
@@ -204,7 +197,19 @@ def _get_intent(arg, language):
                     "intents specified, '%s', %s" % (arg, intents))
     return intents[0]
 
-def _get_pyf_annotations(arg):
+def _get_pyf_proc_annotations(proc):
+    from fparser.statements import Intent, CallStatement    
+    pyf_wraps_c = False
+    pyf_callstatement = None
+    for line in proc.content:
+        if isinstance(line, Intent) and 'C' in line.specs:
+            pyf_wraps_c = True
+        elif isinstance(line, CallStatement):
+            pyf_callstatement = line.expr
+    return dict(pyf_wraps_c=pyf_wraps_c,
+                pyf_callstatement=pyf_callstatement)
+
+def _get_pyf_arg_annotations(arg):
     # Parse Fwrap-compatible intents
     if arg.is_intent_inout():
         # The "inout" feature of f2py is different; hiding
@@ -237,6 +242,17 @@ def _get_pyf_annotations(arg):
         overwrite_flag = False
         overwrite_flag_default = None
 
+    align = None
+    if arg.intent is not None:
+        if 'ALIGNED4' in arg.intent:
+            align = 4
+        elif 'ALIGNED8' in arg.intent:
+            align = 8
+        elif 'ALIGNED16' in arg.intent:
+            align = 16
+
+    pyf_by_value = (arg.intent is not None) and ('C' in arg.intent)
+        
     annotations = dict(pyf_hide=hide,
                        pyf_default_value=arg.init,
                        pyf_check=arg.check,
@@ -244,7 +260,10 @@ def _get_pyf_annotations(arg):
                        pyf_overwrite_flag_default=overwrite_flag_default,
                        # optional fills a rather different role in pyf files
                        # compared to in F90 files, so we use a seperate flag
-                       pyf_optional=arg.is_optional()
+                       pyf_optional=arg.is_optional(),
+                       pyf_depend=arg.depend,
+                       pyf_align=align,
+                       pyf_by_value=pyf_by_value
                        )
 
     return intent, annotations
