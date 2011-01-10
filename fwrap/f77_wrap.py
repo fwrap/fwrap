@@ -83,15 +83,14 @@ def iface_proc_to_cy_proc(proc):
 #
 # Common utils
 #
-def get_arg_type(arg):
+def get_arg_decl(arg):
     if arg.pyf_by_value and arg.dimension is None:
-        return arg.c_type_byval()
+        return arg.c_type_byval(arg.name)
     else:
-        return arg.c_type()
+        return arg.c_type(arg.name)
 
 def get_arg_declarations(proc):
-    decls = ["%s %s" % (get_arg_type(arg), arg.name)
-             for arg in proc.args]
+    decls = [get_arg_decl(arg) for arg in proc.args]
     decls += ["size_t %s_len_" % arg.name
               for arg in proc.args
               if isinstance(arg.dtype, pyf.CharacterType)]

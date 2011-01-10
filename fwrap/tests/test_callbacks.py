@@ -31,6 +31,7 @@ end subroutine caller
     cb_dtype = cb_arg.dtype
     ok_(isinstance(cb_dtype.arg_dtypes[0], pyf.IntegerType))
     ok_(isinstance(cb_dtype.arg_dtypes[1], pyf.RealType))
+    eq_(cb_arg.c_type(), 'void (*)(fwi_integer_t *, fwr_real_x8_t *)')
 
 def test_cb_subr_implicit():
 
@@ -88,6 +89,7 @@ end subroutine caller
     cb_dtype = cb_arg.dtype
     ok_(isinstance(cb_dtype.arg_dtypes[0], pyf.IntegerType))
     ok_(isinstance(cb_dtype.arg_dtypes[1], pyf.RealType))
+    # TODO eq_(cb_arg.c_type(), 'a')
 
 def test_cb_arg_expr():
     fsrc = '''

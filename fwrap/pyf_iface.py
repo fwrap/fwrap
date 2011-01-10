@@ -134,11 +134,17 @@ class Dtype(object):
     def all_dtypes(self):
         return [self]
 
-    def c_declaration_byval(self):
-        return self.fw_ktp
+    def c_declaration_byval(self, name=None):
+        if name is None:
+            return self.fw_ktp
+        else:
+            return '%s %s' % (self.fw_ktp, name)
 
-    def c_declaration(self):
-        return "%s *" % self.fw_ktp
+    def c_declaration(self, name=None):
+        if name is None:
+            return "%s *" % self.fw_ktp
+        else:
+            return "%s * %s" % (self.fw_ktp, name)
 
     def depends(self):
         if not self.odecl:
@@ -194,8 +200,11 @@ cdef extern from "string.h":
         else:
             return self.type
 
-    def c_declaration(self):
-        return 'char *'
+    def c_declaration(self, name=None):
+        if name is None:
+            return 'char *'
+        else:
+            return 'char * %s' % name
 
     odecl = property(_get_odecl)
 
@@ -313,8 +322,11 @@ class _InternCPtrType(Dtype):
     def all_dtypes(self):
         return []
 
-    def c_declaration(self):
-        return "void *"
+    def c_declaration(self, name=None):
+        if name is None:
+            return "void *"
+        else:
+            return "void * %s" % name
 
 c_ptr_type = _InternCPtrType()
 
@@ -332,6 +344,13 @@ class CallbackType(Dtype):
         self.length = None
         self.kind = None
         self.fw_ktp = None
+
+    def c_declaration(self, name=''):
+        # FIXME: Does not work for function callbacks yet,
+        # have not recorded return type
+        return 'void (*%s)(%s)' % (
+            name,
+            ', '.join([t.c_declaration() for t in self.arg_dtypes]))
 
     def __repr__(self):
         return '<Dtype (callback)>'
@@ -368,14 +387,14 @@ class _NamedType(object):
         orig = cfg.fc_wrapper_orig_types
         return '%s :: %s' % ( ', '.join(self.var_specs(orig)), self.name)
 
-    def c_type_byval(self):
-        return self.dtype.c_declaration_byval()
+    def c_type_byval(self, name=None):
+        return self.dtype.c_declaration_byval(name)
 
-    def c_type(self):
-        return self.dtype.c_declaration()
+    def c_type(self, name=None):
+        return self.dtype.c_declaration(name)
 
     def c_declaration(self):
-        return "%s%s" % (self.dtype.c_declaration(), self.name)
+        return self.dtype.c_declaration(self.name)
 
     def depends(self):
         deps = self.dtype.depends()
@@ -576,11 +595,11 @@ class Argument(AstNode):
         assert self.dimension is None
         return self._var.c_type_byval()
 
-    def c_type(self):
-        return self._var.c_type()
+    def c_type(self, name=None):
+        return self._var.c_type(name)
 
-    def c_declaration(self):
-        return self._var.c_declaration()
+    def c_declaration(self, name):
+        return self._var.c_declaration(name)
 
     def all_dtypes(self):
         adts = self.dtype.all_dtypes()
