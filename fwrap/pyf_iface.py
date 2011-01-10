@@ -327,6 +327,10 @@ class CallbackType(Dtype):
         self.kind = None
         self.fw_ktp = None
 
+    def __repr__(self):
+        return '<Dtype (callback)>'
+        
+
 class _NamedType(object):
     '''
     Abstractish base class for something with a name & a type,
