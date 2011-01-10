@@ -187,7 +187,7 @@ For usage information see the function docstrings.
                 "----------"]
     # Datatypes
     dts = all_dtypes(ast)
-    names = sorted([dt.py_type_name() for dt in dts])
+    names = sorted([dt.py_type_name() for dt in dts if dt.fw_ktp is not None])
     dstring += names
 
     return dstring
@@ -272,6 +272,8 @@ class _CyArg(_CyArgBase):
         from fwrap.gen_config import py_type_name_from_type
         if isinstance(self.dtype, pyf_iface.CharacterType):
             return 'bytes'
+        elif isinstance(self.dtype, pyf_iface.CallbackType):
+            return 'object'
         else:
             return py_type_name_from_type(self.cy_dtype_name)
 

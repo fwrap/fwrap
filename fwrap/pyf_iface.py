@@ -110,7 +110,7 @@ class Dtype(object):
     odecl = property(_get_odecl)
 
     def __hash__(self):
-        return hash(self.fw_ktp + (self.odecl or '') + self.type)
+        return hash((self.fw_ktp, self.odecl, self.type))
 
     def __eq__(self, other):
         return (isinstance(other, Dtype) and
