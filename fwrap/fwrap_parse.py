@@ -144,23 +144,43 @@ def callback_arg(p_arg):
             return pyf.Argument(name=p_arg.name, dtype=dt)
 
 def _get_callback_dtype(parent_proc, p_arg, proc_name, arg_lst):
-    from fort_expr import parse, ExpressionType
+    from fort_expr import parse, ExpressionType, NameNode
     if isinstance(arg_lst, list):
         arg_lst = ', '.join(arg_lst)
     proc_call = '%s(%s)' % (proc_name, arg_lst)
     proc_ref = parse(proc_call)
     args = proc_ref.arg_spec_list
     type_ctx = {}
+    bounds = {}
     for vname in parent_proc.a.variables:
         if vname == proc_name:
             continue
-        type_ctx[vname] = parent_proc.a.variables[vname].get_typedecl()
+        v = parent_proc.a.variables[vname]
+        bounds[vname] = v.bounds
+        type_ctx[vname] = v.get_typedecl()
     type_visitor = ExpressionType(type_ctx)
     arg_dtypes = []
+    arg_dims = []
+    arg_names = []
     for arg in args:
         arg_dt = _get_dtype(type_visitor.visit(arg), 'fortran')
+        if isinstance(arg.arg, NameNode) and arg.arg.name in type_ctx:
+            # If call argument is a simple name node, we record the
+            # name to make manual modification of wrapper a bit easier.
+            # Also, record array bound information.
+            name = arg.arg.name
+            bound = bounds[name]
+            dimspec = None if bound is None else pyf.Dimension(bound)
+        else:
+            dimspec = None
+            name = None
         arg_dtypes.append(arg_dt)
-    return pyf.CallbackType(arg_dtypes=arg_dtypes)
+        arg_dims.append(dimspec)
+        arg_names.append(name)
+
+    return pyf.CallbackType(arg_dtypes=arg_dtypes,
+                            arg_dims=arg_dims,
+                            arg_names=arg_names)
 
 def _get_args(proc, language):
     args = []

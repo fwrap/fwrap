@@ -33,6 +33,29 @@ end subroutine caller
     ok_(isinstance(cb_dtype.arg_dtypes[1], pyf.RealType))
     eq_(cb_arg.c_type(), 'void (*)(fwi_integer_t *, fwr_real_x8_t *)')
 
+def test_cb_array():
+    fsrc = '''\
+subroutine caller(cb_, a, n)
+    implicit none
+    integer n
+    real*8 a(n)
+    external cb_
+    call cb_(a, n)
+end subroutine
+'''
+    cfg = configuration.Configuration('empty.pyx')
+    ast = fwrapper.parse([fsrc], cfg)
+    cb_arg = ast[0].args[0]
+    eq_(cb_arg.name, 'cb_')
+    eq_(type(cb_arg.dtype), pyf.CallbackType)
+    cb_dtype = cb_arg.dtype
+    ok_(isinstance(cb_dtype.arg_dtypes[0], pyf.RealType))
+    ok_(isinstance(cb_dtype.arg_dtypes[1], pyf.IntegerType))
+    eq_(cb_dtype.arg_dims[0], pyf.Dimension(['n']))
+    eq_(cb_dtype.arg_dims[1], None)
+    eq_(cb_dtype.arg_names, ['a', 'n'])
+    
+
 def test_cb_subr_implicit():
 
     fsrc = '''\
