@@ -48,8 +48,10 @@ def fortran_ast_to_cython_ast(ast):
 def iface_proc_to_cy_proc(proc):
     from cy_wrap import (cy_arg_factory, CyProcedure, get_in_args,
                          get_out_args, get_aux_args)
+
+    cy_name = _py_kw_mangler(proc.name)
     
-    call_args = [cy_arg_factory(arg, arg.dimension is not None)
+    call_args = [cy_arg_factory(arg, arg.dimension is not None, cy_name)
                  for arg in proc.args]
     if proc.kind == 'function':
         if proc.return_arg.dimension is not None:
@@ -72,7 +74,7 @@ def iface_proc_to_cy_proc(proc):
         proc,
         name=proc.name,
         fc_name=proc.name,
-        cy_name=_py_kw_mangler(proc.name),
+        cy_name=cy_name,
         call_args=call_args,
         in_args=in_args,
         out_args=out_args,

@@ -41,7 +41,7 @@ def fc_proc_to_cy_proc(fc_proc):
     fw_arg_man = fc_proc.arg_man
     args = []
     for fw_arg in fw_arg_man.arg_wrappers:
-        args.append(cy_arg_factory(fw_arg, fw_arg.is_array))
+        args.append(cy_arg_factory(fw_arg, fw_arg.is_array, cy_name))
 
     all_dtypes_list = fc_proc.all_dtypes()
 
@@ -56,7 +56,7 @@ def fc_proc_to_cy_proc(fc_proc):
         aux_args=get_aux_args(args),
         all_dtypes_list=all_dtypes_list)
 
-def cy_arg_factory(arg, is_array):
+def cy_arg_factory(arg, is_array, proc_name):
     # Is passed both fc_wrap arguments and pyf_iface arguments;
     # their attributes mostly overlap
     import fc_wrap
@@ -83,6 +83,9 @@ def cy_arg_factory(arg, is_array):
                 cls = _CySingleCharArg
             else:
                 cls = _CyStringArg
+        elif isinstance(arg.dtype, pyf_iface.CallbackType):
+            cls = CyCallbackArg
+            attrs['callback_wrapper_basename'] = '%s_%s_cb_' % (proc_name, attrs['cy_name'])
         else:
             cls = _CyArg
         if arg.name == constants.ERR_NAME:
@@ -861,6 +864,76 @@ class CyCharArrayArg(_CyArrayArg):
             dstring.append("intent %s" % self.intent)
         return [", ".join(dstring)]
 
+class CyCallbackArg(_CyArg):
+    callback_wrapper_basename = None
+
+    def _update(self):
+        super(CyCallbackArg, self)._update()
+        self.callback_core_name = '%swrapper_core' % self.callback_wrapper_basename
+        self.callback_wrapper_name = '%swrapper' % self.callback_wrapper_basename
+        self.callback_info_name = '%sinfo' % self.callback_wrapper_basename
+
+    def call_arg_list(self, ctx):
+        return ['&%s' % self.callback_wrapper_name]
+
+    def _get_cy_dtype_name(self):
+        return 'object'
+
+    def _get_py_dtype_name(self):
+        return 'object'
+
+    def generate_callback_wrapper(self, ctx, buf):
+        ctx.use_utility_code(callback_utility_code)
+        arg_names = ['arg%d' % idx for idx in range(len(self.dtype.arg_dtypes))]
+        arg_decls = ['%s %s' % (t.c_declaration(), name)
+                     for t, name in zip(self.dtype.arg_dtypes, arg_names)]
+        for arg_dtype in self.dtype.arg_dtypes:
+            print arg_dtype.__dict__
+        has_arrays = any(arg_dtype.dimension is not None
+                         for arg_dtype in self.dtype.arg_dtypes)
+##         for arg_dtype in self.dtype.arg_dtypes:
+##             if arg_dtype.dimension is not None:
+##                 ndim = arg.
+##             array_creation.append(
+##                 'np.PyArray_New(&np.PyArray_Type, %(ndim)d, '
+##             PyArrayObject *tmp_arr = (PyArrayObject *)PyArray_New(&PyArray_Type,1,x_Dims,PyArray_DOUBLE,NULL,(char*)x,0,NPY_FARRAY,NULL); /*XXX: Hmm, what will destroy this array??? */
+            
+        d.update(arg_decls=', '.join(arg_decls),
+                 arg_names=', '.join(arg_names),
+                 global_info=self.callback_info_name,
+                 wrapper_core=self.callback_core_name,
+                 wrapper=self.callback_wrapper_name)
+        buf.put('''
+        cdef fw_CallbackInfo %(global_info)s
+        cdef int %(wrapper_core)(%(arg_decls)s):
+            global %(global_info)s;
+            cdef fw_CallbackInfo info
+        ''' % d)
+        buf.indent()
+        if has_arrays:
+            buf.putln('cdef np.npy_intp shape[np.NPY_MAXDIMS]')
+        buf.put('''
+            info = %(global_info)s;
+            try:
+            ''')
+        buf.indent()
+        for arg_dtype in self.dtype.arg_dtypes:
+            dimension = arg_dtype.dimension
+            if dimension is not None:
+                print dimension()
+        buf.put('''
+                        if info.extra_args is None:
+                    info.callback()
+                ''')
+        buf.dedent()
+        buf.dedent()
+        buf.put('''
+        cdef void %(wrapper)(%(arg_decls)s):
+            if %(wrapper_core)(%(arg_names)s) != 0:
+                longjmp(%(global_info).jmp, 1)
+        ''' % d)
+
+        
 
 class CyArgManager(object):
 
@@ -1091,7 +1164,13 @@ class CyProcedure(AstNode):
                    ex=execute_expr, doc=doc)
             yield cs
 
+    def generate_callback_wrappers(self, ctx, buf):
+        for arg in self.call_args:
+            if isinstance(arg, CyCallbackArg):
+                arg.generate_callback_wrapper(ctx, buf)
+
     def generate_wrapper(self, ctx, buf):
+        self.generate_callback_wrappers(ctx, buf)
         buf.putln(self.proc_declaration(ctx))
         buf.indent()
         self.put_docstring(buf)
@@ -1342,6 +1421,27 @@ cdef char fw_aschar(object s):
         return 0
     else:
         return buf[0]
+"""
+
+callback_utility_code = u"""
+cdef extern from "setjmp.h":
+    ctypedef struct jmp_buf:
+        pass    
+    int setjmp(jmp_buf env)
+    void longjmp(jmp_buf env, int val)
+
+cdef class fw_CallbackInfo(object):
+    # Callable object to call
+    cdef object callback
+    # Pass *extra_args to callback (can be None)
+    cdef object extra_args
+    # If an exception is raised by callback it is stored here
+    cdef object exc
+    # Some times, one may want to communicate objects directly that are
+    # simply passed through in Fortran (in particular NumPy arrays)
+    cdef object arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9
+    # For use by longjmp
+    cdef jmp_buf jmp
 """
 
 ## explicit_shape_array_utility_code = u"""
