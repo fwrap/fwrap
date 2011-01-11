@@ -303,7 +303,7 @@ class _CyArg(_CyArgBase):
         else:
             typedecl = self.intern_typedecl
         if self.intern_typedecl is not None or not extern_decl_made:
-            return ["cdef %s %s" % (typedecl, self.intern_name)]
+            return [(typedecl, self.intern_name)]
         else:
             return []
 
@@ -376,7 +376,7 @@ class _CySingleCharArg(_CyArg):
         return "object"
 
     def intern_declarations(self, ctx, extern_decl_made):
-        return ['cdef char *%s = [0, 0]' % self.buf_name]
+        return [('char', '*%s = [0, 0]' % self.buf_name)]
 
     def pre_call_code(self, ctx):
         ctx.use_utility_code(as_char_utility_code)        
@@ -425,10 +425,10 @@ class _CyStringArg(_CyArg):
 
     def intern_declarations(self, ctx, extern_decl_made):
         # TODO: Check extern_decl_made here?
-        ret = ['cdef %s %s' % (self.cy_dtype_name, self.intern_name),
-                'cdef fw_shape_t %s' % self.intern_len_name]
+        ret = [(self.cy_dtype_name, self.intern_name),
+               ('fw_shape_t', self.intern_len_name)]
         if self.intent in ('out', 'inout', None):
-            ret.append('cdef char *%s' % self.intern_buf_name)
+            ret.append(('char', '*%s' % self.intern_buf_name))
         return ret
 
     def get_len(self):
@@ -519,8 +519,8 @@ class _CyErrStrArg(_CyArgBase):
         return []
 
     def intern_declarations(self, ctx, extern_decl_made):
-        return ['cdef fw_character_t %s[%s]' %
-                    (self.cy_name, constants.ERRSTR_LEN)]
+        return [('fw_character_t', '%s[%s]' %
+                 (self.cy_name, constants.ERRSTR_LEN))]
 
     def call_arg_list(self, ctx):
         return [self.cy_name]
@@ -638,8 +638,8 @@ class _CyArrayArg(_CyArgBase):
         return [('object %s' % self.cy_name, default)]
 
     def intern_declarations(self, ctx, extern_decl_made):
-        decls = ["cdef np.ndarray %s" % self.intern_name,
-                 "cdef np.npy_intp %s[%d]" % (self.shape_name, self.ndims)]
+        decls = [('np.ndarray', self.intern_name),
+                 ('np.npy_intp', '%s[%d]' % (self.shape_name, self.ndims))]
         return decls            
 
     def _get_py_dtype_name(self):
@@ -816,8 +816,8 @@ class CyCharArrayArg(_CyArrayArg):
 
     def intern_declarations(self, ctx, extern_decl_made):
         ret = super(CyCharArrayArg, self).intern_declarations(ctx, extern_decl_made)
-        return ret + ["cdef fw_shape_t %s[%d]" %
-                (self.shape_name, self.ndims+1)]
+        return ret + [('fw_shape_t', '%s[%d]' %
+                       (self.shape_name, self.ndims+1))]
 
     def pre_call_code(self, ctx):
         tmpl = ("%(odtype)s = %(name)s.dtype\n"
@@ -1018,9 +1018,11 @@ class CyProcedure(AstNode):
         return proc_call
 
     def temp_declarations(self, buf, ctx):
-        decls = self.arg_mgr.intern_declarations(ctx)
-        for line in decls:
-            buf.putln(line)
+        decls_by_type = {}
+        for typepart, namepart in self.arg_mgr.intern_declarations(ctx):
+            decls_by_type.setdefault(typepart, []).append(namepart)
+        for typepart, nameparts in decls_by_type.iteritems():
+            buf.putln('cdef %s %s' % (typepart, ', '.join(nameparts)))
 
     def return_tuple(self, ctx):
         ret_arg_list = []
