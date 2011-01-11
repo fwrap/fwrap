@@ -334,12 +334,12 @@ class CToCython(object):
                 if doc:
                     return '%s.shape[0]' % args[0]
                 else:
-                    return 'np.PyArray_DIMS(%s)[0]' % args[0]
+                    return '%sshape[0]' % args[0] # FIXME: Depends on name mangling in cy_wrap
             elif func in ('shape', 'old_shape'):
                 if doc:
                     r = '%s.shape[%s]' % (args[0], args[1])
                 else:
-                    r = 'np.PyArray_DIMS(%s)[%s]' % (args[0], args[1])
+                    r = '%sshape[%s]' % (args[0], args[1]) # FIXME: Depends on name mangling in cy_wrap
                 if func.startswith('old'):
                     r = '##TODO Get shape before broadcasting: %s' % r
                 return r

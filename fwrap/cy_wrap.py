@@ -579,6 +579,7 @@ class _CyArrayArg(_CyArgBase):
     def _update(self):
         from fwrap.gen_config import py_type_name_from_type
         self.intern_name = '%s_' % self.cy_name
+        self.shape_name = '%s_shape' % self.cy_name
 
         # In the special case of explicit-shape intent(out) arrays,
         # find the expressions for constructing the output argument
@@ -637,7 +638,8 @@ class _CyArrayArg(_CyArgBase):
         return [('object %s' % self.cy_name, default)]
 
     def intern_declarations(self, ctx, extern_decl_made):
-        decls = ["cdef np.ndarray %s" % self.intern_name]
+        decls = ["cdef np.ndarray %s" % self.intern_name,
+                 "cdef np.npy_intp %s[%d]" % (self.shape_name, self.ndims)]
         return decls            
 
     def _get_py_dtype_name(self):
@@ -651,7 +653,7 @@ class _CyArrayArg(_CyArgBase):
         if ctx.cfg.f77binding:
             shape_args = []
         else:
-            shape_args = ['np.PyArray_DIMS(%s)' % self.intern_name]
+            shape_args = [self.shape_name]
         return shape_args + [
             '<%s*>np.PyArray_DATA(%s)%s' %
             (self.ktp, self.intern_name, offset_code)]
@@ -661,7 +663,8 @@ class _CyArrayArg(_CyArgBase):
              'extern' : self.cy_name,
              'dtenum' : self.npy_enum,
              'ndim' : self.ndims,
-             'alignstr' : '' if self.pyf_align is None else ', %d' % self.pyf_align}
+             'alignstr' : '' if self.pyf_align is None else ', %d' % self.pyf_align,
+             'shapevar' : self.shape_name}
         # Can we allocate the out-array ourselves? Currently this
         # involves trying to parse the size expression to see if it
         # is simple enough.
@@ -701,8 +704,6 @@ class _CyArrayArg(_CyArgBase):
                     requires.update(dimrequires)
             else:
                 shape_info.append(None)
-        if can_allocate:
-            d['shape'] = ', '.join(expr for expr, _, _ in shape_info)
 
         # Figure out the copy flag
         if self.pyf_overwrite_flag:
@@ -725,17 +726,14 @@ class _CyArrayArg(_CyArgBase):
         cs = CodeSnippet(('init', self.intern_name),
                          [('init', r) for r in requires])
 
+        if can_allocate and self.pyf_hide:
+            d['extern'] = 'None'
+        d['create'] = bool(can_allocate)
         if can_allocate:
-            if self.pyf_hide:
-                d['from'] = 'None'
-            else:
-                d['from'] = self.cy_name
-            ctx.use_utility_code(explicit_shape_array_utility_code)
-            cs.putln('%(intern)s, %(extern)s = fw_explicitshapearray(%(from)s, %(dtenum)s, '
-                     '%(ndim)d, [%(shape)s], %(copy)s%(alignstr)s)' % d)
-        else:
-            cs.putln('%(intern)s, %(extern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '
-                     '%(ndim)d, %(copy)s%(alignstr)s)' % d)
+            cs.putln('; '.join('%s[%d] = %s' % (self.shape_name, idx, expr)
+                               for idx, (expr, _, _) in enumerate(shape_info)))
+        cs.putln('%(intern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '
+                 '%(ndim)d, %(shapevar)s, %(copy)s, %(create)s%(alignstr)s)' % d)
         yield cs
 
         #
@@ -756,13 +754,13 @@ class _CyArrayArg(_CyArgBase):
                     # last dimension, can truncate
                     cs.put(
                         '''\
-    if not (0 <= %(expr)s <= np.PyArray_DIMS(%(intern)s)[%(idx)d]%(mem_offset_code)s):
+    if not (0 <= %(expr)s <= %(shapevar)s[%(idx)d]%(mem_offset_code)s):
         raise ValueError("(0 <= %(doc)s <= %(extern)s.shape[%(idx)d]%(mem_offset_code)s) not satisifed")
                     ''' % d)
                 else:
                     cs.put(
                         '''\
-    if %(expr)s != np.PyArray_DIMS(%(intern)s)[%(idx)d]:
+    if %(expr)s != %(shapevar)s[%(idx)d]:
         raise ValueError("(%(doc)s == %(extern)s.shape[%(idx)d]) not satisifed")
                     ''' % d)
             yield cs
@@ -777,7 +775,7 @@ class _CyArrayArg(_CyArgBase):
         if self.intent in ('out', 'inout', None):
             # fw_asfortranarray returns tuple with internal and external view,
             # and we return the external one
-            return [self.cy_name]
+            return [self.intern_name]
         return []
 
     def _gen_dstring(self):
@@ -1231,68 +1229,71 @@ class CythonExpression(object):
         return "<CythonExpression %r (depends: %r)>" % (self.template, self.requires)
 
 
-explicit_shape_array_utility_code = u"""
-cdef object fw_explicitshapearray(object value, int typenum, int ndim,
-                                  np.intp_t *shape, bint copy, int alignment=1):
-    if value is None:
-        result = np.PyArray_ZEROS(ndim, shape, typenum, 1)
-        return result, result 
-    else:
-        return fw_asfortranarray(value, typenum, ndim, copy, alignment)
-"""
-
 as_fortran_array_utility_code = u"""
-cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy,
-                              int alignment=1):
+cdef np.ndarray fw_asfortranarray(object value, int typenum, int ndim,
+                                  np.intp_t * shape, bint copy,
+                                  bint create, int alignment=1):
     cdef int flags = np.NPY_F_CONTIGUOUS
-    if ndim <= 1:
-        # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
-        flags |= np.NPY_C_CONTIGUOUS
-    if (not copy and alignment > 1 and np.PyArray_Check(value) and
-        (<Py_ssize_t>np.PyArray_DATA(value) & (alignment - 1) != 0)):
-        # mis-aligned array
-        copy = True    
-    if copy:
-        flags |= np.NPY_ENSURECOPY
-    result = np.PyArray_FROMANY(value, typenum, ndim, ndim, flags)
-    return result, result
+    cdef int i
+    cdef np.npy_intp *result_shape
+    cdef np.ndarray result
+    if value is None:
+        if create:
+            result = np.PyArray_ZEROS(ndim, shape, typenum, 1)
+        else:
+            raise TypeError('Expected array but None provided')
+    else:
+        if ndim <= 1:
+            # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
+            flags |= np.NPY_C_CONTIGUOUS
+        if (not copy and alignment > 1 and np.PyArray_Check(value) and
+            (<Py_ssize_t>np.PyArray_DATA(value) & (alignment - 1) != 0)):
+            # mis-aligned array
+            copy = True    
+        if copy:
+            flags |= np.NPY_ENSURECOPY
+        result = np.PyArray_FROMANY(value, typenum, ndim, ndim, flags)
+        result_shape = np.PyArray_DIMS(result)
+        for i in range(ndim):
+            shape[i] = result_shape[i]
+    return result
 """
 
 as_fortran_array_f2pystyle_utility_code = u"""
-cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy,
-                              int alignment=1):
+cdef np.ndarray fw_asfortranarray(object value, int typenum, int ndim,
+                                  np.intp_t * coerced_shape,
+                                  bint copy, bint create, int alignment=1):
     cdef int flags = np.NPY_F_CONTIGUOUS | np.NPY_FORCECAST
-    cdef np.npy_intp out_shape[np.NPY_MAXDIMS]
-    cdef np.PyArray_Dims out_dims
     cdef np.ndarray result
     cdef np.npy_intp * in_shape
     cdef int in_ndim
     cdef int i
-    if ndim <= 1:
-        # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
-        flags |= np.NPY_C_CONTIGUOUS
-    if (not copy and alignment > 1 and np.PyArray_Check(value) and
-        (<Py_ssize_t>np.PyArray_DATA(value) & (alignment - 1) != 0)):
-        # mis-aligned array
-        copy = True
-    if copy:
-        flags |= np.NPY_ENSURECOPY
-    result = np.PyArray_FROMANY(value, typenum, 0, 0, flags)
-    in_ndim = np.PyArray_NDIM(result)
-    if in_ndim == ndim:
-        return result, result
-    elif in_ndim > ndim:
-        raise ValueError("Dimension of array must be <= %d" % ndim)
+    if value is None:
+        if create:
+            result = np.PyArray_ZEROS(ndim, coerced_shape, typenum, 1)
+        else:
+            raise TypeError('Expected array but None provided')
     else:
-        # Make view where shape is padded with ones on right side
-        in_shape = np.PyArray_DIMS(result)
-        for i in range(in_ndim):
-            out_shape[i] = in_shape[i]
-        for i in range(in_ndim, ndim):
-            out_shape[i] = 1
-        out_dims.ptr = out_shape
-        out_dims.len = ndim
-        return np.PyArray_Newshape(result, &out_dims, np.NPY_FORTRANORDER), result
+        if ndim <= 1:
+            # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
+            flags |= np.NPY_C_CONTIGUOUS
+        if (not copy and alignment > 1 and np.PyArray_Check(value) and
+            (<Py_ssize_t>np.PyArray_DATA(value) & (alignment - 1) != 0)):
+            # mis-aligned array
+            copy = True
+        if copy:
+            flags |= np.NPY_ENSURECOPY
+        result = np.PyArray_FROMANY(value, typenum, 0, 0, flags)
+    in_ndim = np.PyArray_NDIM(result)
+    if in_ndim > ndim:
+        raise ValueError("Dimension of array must be <= %d" % ndim)
+    in_shape = np.PyArray_DIMS(result)
+    for i in range(in_ndim):
+        coerced_shape[i] = in_shape[i]
+    for i in range(in_ndim, ndim):
+        # Pad shape with ones on right side if necessarry
+        coerced_shape[i] = 1
+    return result
 """
 
 
