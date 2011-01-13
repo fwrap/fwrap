@@ -135,9 +135,10 @@ def generate_cy_pyx(ast, name, buf, cfg):
         ast = cy_deduplify(ast, cfg)    
     buf.putln("#cython: ccomplex=True")
     buf.putln(' ')
-    put_cymod_docstring(ast, name, buf)
+    put_cymod_docstring(ast, name, buf, cfg)
     buf.putln("np.import_array()")
-    buf.putln("include 'fwrap_ktp.pxi'")
+    if not cfg.f77binding:
+        buf.putln("include 'fwrap_ktp.pxi'")
     gen_cimport_decls(buf)
     gen_cdef_extern_decls(buf)
     for proc in ast:
@@ -153,15 +154,15 @@ def generate_cy_pyx(ast, name, buf, cfg):
     cfg.serialize_to_pyx(buf)
     buf.putln('')
 
-def put_cymod_docstring(ast, modname, buf):
-    dstring = get_cymod_docstring(ast, modname)
+def put_cymod_docstring(ast, modname, buf, cfg):
+    dstring = get_cymod_docstring(ast, modname, cfg)
     buf.putln('"""' + dstring[0])
     buf.putlines(dstring[1:])
     buf.putempty()
     buf.putln('"""')
 
 # XXX:  Put this in a cymodule class?
-def get_cymod_docstring(ast, modname):
+def get_cymod_docstring(ast, modname, cfg):
     from fwrap.version import get_version
     from fwrap.gen_config import all_dtypes
     dstring = ("""\
@@ -181,14 +182,14 @@ For usage information see the function docstrings.
     names = ["%s(...)" % name for name in names]
     dstring += names
 
-    dstring += [""]
-
-    dstring += ["Data Types",
+    if not cfg.f77binding:
+        dstring += [""]
+        dstring += ["Data Types",
                 "----------"]
-    # Datatypes
-    dts = all_dtypes(ast)
-    names = sorted([dt.py_type_name() for dt in dts])
-    dstring += names
+        # Datatypes
+        dts = all_dtypes(ast)
+        names = sorted([dt.py_type_name() for dt in dts])
+        dstring += names
 
     return dstring
 
