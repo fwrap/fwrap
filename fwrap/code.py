@@ -280,7 +280,7 @@ def topological_sort(input_nodes):
             result.append(node)
             colors[node.provides] = BLACK
         elif color == GRAY:
-            raise DependencyException('Infinite loop (revisited %s)' % node.provides)
+            raise DependencyException('Infinite loop (revisited %s)' % list(node.provides))
             
 
     leafs = find_leafs(input_nodes)
