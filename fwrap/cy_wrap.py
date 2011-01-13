@@ -349,7 +349,7 @@ class _CyArg(_CyArgBase):
         return [self.intern_name]
 
     def docstring_return_tuple_list(self):
-        return _CyArg.return_tuple_list(self, ctx=None)
+        return [self.cy_name]
 
     def _gen_dstring(self):
         dstring = ("%s : %s" %
