@@ -141,6 +141,8 @@ def generate_cy_pyx(ast, name, buf, cfg):
         buf.putln("include 'fwrap_ktp.pxi'")
     gen_cimport_decls(buf)
     gen_cdef_extern_decls(buf)
+    if cfg.f77binding:
+        buf.putln('__all__ = %s' % repr([proc.cy_name for proc in ast]))
     for proc in ast:
         ctx.language = proc.language
         assert ctx.language in ('fortran', 'pyf')
