@@ -43,6 +43,12 @@ python module pyf_support
           integer :: n
         end subroutine
 
+        subroutine intent_inout_arange(x, n) ! and fortranname
+          fortranname intent_overwrite_arange
+          real*8, intent(inout), dimension(n) :: x
+          integer, intent(in) :: n
+        end subroutine intent_inout_arange
+
         function sum_and_fill_optional_arrays(x, y, z, m, n)
           ! m, n will end up first Python-side
           double precision dimension(m,n), intent(in,out), optional :: x = 0

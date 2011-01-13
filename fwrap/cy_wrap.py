@@ -106,6 +106,7 @@ def get_out_args(args):
     return [arg for arg in args
             if (not arg.pyf_hide and
                 arg.intent in ('out', 'inout', None) and
+                not arg.pyf_no_return and
                 not isinstance(arg, _CyErrStrArg))]
 
 def get_aux_args(args):
@@ -209,6 +210,7 @@ class _CyArgBase(AstNode):
     pyf_optional = False
     pyf_align = None
     pyf_by_value = False
+    pyf_no_return = False
     
     cy_default_value = None # or CythonExpression
 
@@ -740,9 +742,10 @@ class _CyArrayArg(_CyArgBase):
         yield cs
 
         #
-        # Code for checking explicit shapes in f77binding mode
+        # Code for checking explicit shapes in f77binding mode.
+        # Not needed when the array is a buffer we allocated ourselves.
         #
-        if ctx.cfg.f77binding:
+        if ctx.cfg.f77binding and not (can_allocate and self.pyf_hide):
             cs = CodeSnippet(('check', self.intern_name),
                              [('init', self.intern_name)])
             for idx, info in enumerate(shape_info):

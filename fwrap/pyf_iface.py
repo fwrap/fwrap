@@ -523,6 +523,7 @@ class Argument(AstNode):
     pyf_optional = False
     pyf_align = None
     pyf_by_value = False
+    pyf_no_return = False
 
     def _update(self):
         self._var = Var(name=self.name, dtype=self.dtype,
