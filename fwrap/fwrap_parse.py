@@ -140,16 +140,21 @@ def _get_intent(arg, language):
     return intents[0]
 
 def _get_pyf_proc_annotations(proc):
-    from fparser.statements import Intent, CallStatement    
+    from fparser.statements import Intent, CallStatement, FortranName
     pyf_wraps_c = False
     pyf_callstatement = None
+    pyf_fortranname = None
     for line in proc.content:
         if isinstance(line, Intent) and 'C' in line.specs:
             pyf_wraps_c = True
         elif isinstance(line, CallStatement):
             pyf_callstatement = line.expr
+        elif isinstance(line, FortranName):
+            pyf_fortranname = line.value
+
     return dict(pyf_wraps_c=pyf_wraps_c,
-                pyf_callstatement=pyf_callstatement)
+                pyf_callstatement=pyf_callstatement,
+                pyf_fortranname=pyf_fortranname)
 
 def _get_pyf_arg_annotations(arg):
     # Parse Fwrap-compatible intents

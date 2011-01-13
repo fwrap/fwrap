@@ -966,6 +966,7 @@ class CyProcedure(AstNode):
     checks = ()
     pyf_pre_call_code = None
     pyf_post_call_code = None
+    pyf_fortranname = None
 
     # Only used in f77binding (otherwise the function is wrapped
     # to become a subprocedure instead). The return_arg should
@@ -1181,6 +1182,11 @@ class CyProcedure(AstNode):
 
         return dstring
 
+    def get_fortran_name(self):
+        if self.pyf_fortranname is not None:
+            return self.pyf_fortranname
+        else:
+            return self.name
 
 class CythonExpression(object):
     """

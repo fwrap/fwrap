@@ -698,6 +698,7 @@ class Procedure(AstNode):
     kind = None
     pyf_callstatement = None
     pyf_wraps_c = False
+    pyf_fortranname = None
 
     def _validate(self, name, language, **kw):
         assert language in ('fortran', 'pyf')

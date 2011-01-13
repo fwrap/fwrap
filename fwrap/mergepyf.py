@@ -62,14 +62,16 @@ def mergepyf_ast(cython_ast, cython_ast_from_pyf):
     # Primarily just copy ast, but merge in select detected manual
     # modifications to the pyf file present in pyf_ast
 
-    pyf_procs = dict((proc.name, proc) for proc in cython_ast_from_pyf)
+    # Many pyf procedures can wrap the same function differently...
+    pyf_proc_map = {}
+    for pyf_proc in cython_ast_from_pyf:
+        pyf_proc_map.setdefault(pyf_proc.get_fortran_name(), []).append(pyf_proc)
     result = []
     for proc in cython_ast:
         try:
-            pyf_proc = pyf_procs.get(proc.name, None)
-            if pyf_proc is None:
-                continue # treat as manually excluded
-            result.append(mergepyf_proc(proc, pyf_proc))
+            pyf_procs = pyf_proc_map.get(proc.name, ())
+            for pyf_proc in pyf_procs:
+                result.append(mergepyf_proc(proc, pyf_proc))
         except CouldNotMergeError, e:
             warn('Could not import procedure "%s" from .pyf, '
                  'please modify manually: %s' % (proc.name, e))
@@ -102,7 +104,7 @@ def mergepyf_proc(f_proc, pyf_proc):
     #
     # Try to parse call_statement to figure out as much as
     # possible, and leave the rest to the user.
-    func_name = f_proc.name
+    func_name = pyf_proc.name
     callstat = pyf_proc.pyf_callstatement
     return_arg = None
 
@@ -209,7 +211,8 @@ def mergepyf_proc(f_proc, pyf_proc):
                                  language='pyf',
                                  pyf_pre_call_code=pre_call_code,
                                  pyf_post_call_code=post_call_code,
-                                 return_arg=return_arg)
+                                 return_arg=return_arg,
+                                 cy_name=pyf_proc.cy_name)
     return result
 
 callstatement_arg_re = re.compile(r'^\s*(&)?\s*([a-zA-Z0-9_]+)(\s*\+\s*([a-zA-Z0-9_]+))?\s*$')

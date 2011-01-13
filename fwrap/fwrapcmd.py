@@ -185,7 +185,10 @@ def mergepyf_cmd(opts):
     # Below we commit removal of this functions as a seperate commit,
     # to keep the history much cleaner.
     routines_in_fortran = [routine.name for routine in f_ast]
-    routines_in_pyf = [routine.name for routine in pyf_f_ast]
+    routines_in_pyf = [(routine.pyf_fortranname
+                        if routine.pyf_fortranname is not None
+                        else routine.name)
+                       for routine in pyf_f_ast]
     excluded_by_pyf = set(routines_in_fortran) - set(routines_in_pyf)
     cfg.exclude_routines(excluded_by_pyf)
 
