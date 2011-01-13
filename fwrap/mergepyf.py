@@ -264,7 +264,8 @@ def process_in_args(in_args):
     # Arguments must be changed as follows:
     # a) Reorder so that arguments with defaults come last
     # b) Parse the default_value into something usable by Cython.
-    mandatory = [arg for arg in in_args if not arg.is_optional()]
+    mandatory = [arg for arg in in_args
+                 if not arg.is_optional() and arg.intent != 'out']
     optional = [arg for arg in in_args
                 if arg.is_optional() and arg.intent != 'out']
     out_args = [arg for arg in in_args if arg.intent == 'out']
