@@ -137,6 +137,11 @@ def write_pxd(ctps, fbuf, h_name):
     for ctp in ctps:
         for line in ctp.gen_pxd_intern_typedef():
             buf.write(line+'\n')
+    buf.write('cdef extern from *: # really from NumPy headers, pulled in by numpy.pxd\n')
+    buf.write('    cdef enum:\n')
+    for ctp in ctps:
+        for line in ctp.gen_pxd_numpy_type_enum():
+            buf.write(INDENT*2+line+'\n')
     for ctp in ctps:
         for line in ctp.gen_pxd_extern_typedef():
             extern_block.write(INDENT+line+'\n')
@@ -247,13 +252,15 @@ class _ConfigTypeParam(object):
         else:
             return ['ctypedef %s %s' % (f2cy[self.fc_type], self.fwrap_name)]
 
+    def gen_pxd_numpy_type_enum(self):
+        self.check_init()
+        return ['%s "%s"' % (self.npy_enum, type2enum[self.fc_type])]
+
     def gen_pyx_type_obj(self):
         self.check_init()
-        enum_code = ['%s = np.%s' % (self.npy_enum, type2enum[self.fc_type])]
-        type_obj_code = ['%s = np.%s' %
+        return ['%s = np.%s' %
                 (py_type_name_from_type(self.fwrap_name),
                  f2npy_type[self.fc_type])]
-        return enum_code + type_obj_code
 
     def gen_pxd_intern_typedef(self):
         return []
