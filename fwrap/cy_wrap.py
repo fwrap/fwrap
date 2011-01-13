@@ -1191,10 +1191,11 @@ class CythonExpression(object):
     call substitute with a map from Fortran name of
     arguments/variables to the equivalent in generated Cython code.
     """
-    def __init__(self, template, requires, doc=''):
+    def __init__(self, template, requires, doc='', is_literal=None):
         self.template = template
         self.requires = requires
         self.doc = doc
+        self._is_literal = is_literal
 
     def substitute(self, variable_map, doc_variable_map=None):
         if doc_variable_map is None:
@@ -1204,12 +1205,15 @@ class CythonExpression(object):
                 self.doc % doc_variable_map)
 
     def is_literal(self):
-        try:
-            self.as_literal()
-        except ValueError:
-            return False
+        if self._is_literal is None:
+            try:
+                self.as_literal()
+            except ValueError:
+                return False
+            else:
+                return True
         else:
-            return True
+            return self._is_literal
 
     def as_literal(self):
         try:

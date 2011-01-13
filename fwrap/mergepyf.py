@@ -416,4 +416,5 @@ def c_to_cython_warn(s, func_name):
         return c_to_cython(s)
     except ValueError, e:
         warn('Problem in %s: %s' % (func_name, e))
-        return CythonExpression(TODO_PLACEHOLDER % s, [], s)
+        return CythonExpression(TODO_PLACEHOLDER % s, [], s,
+                                is_literal=False)
