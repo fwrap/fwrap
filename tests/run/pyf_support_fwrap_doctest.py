@@ -197,5 +197,10 @@ intent(inout):
     >>> x
     array([ 1.,  2.,  3.,  4.])
 
+initialization of scalars:
+
+    >>> scalars_initialized_to_zero()
+    (0, 0.0, 0j, 1)
+
 """
 

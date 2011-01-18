@@ -242,7 +242,8 @@ class _CyArgBase(AstNode):
     def is_optional(self):
         return (self.cy_default_value is not None or self.pyf_default_value is not None)
 
-    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
+    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name,
+                          is_in_arg, is_return_arg):
         yield CodeSnippet(('init', self.intern_name))
 
 class _CyArg(_CyArgBase):
@@ -324,25 +325,32 @@ class _CyArg(_CyArgBase):
     def pre_call_code(self, ctx):
         return []
     
-    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
+    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name,
+                          is_in_arg, is_return_arg):
         # Initialization code
         initcs = CodeSnippet(('init', self.intern_name))
+        empty = True
         if (self.dtype is not None and self.dtype.type == 'logical' and
             self.intent in ('in', 'inout', None)):
             # emulates PyObject_IsTrue used by f2py:
             initcs.put('%s = 1 if %s else 0' % (self.intern_name, self.cy_name))
+            empty = False
         if self.cy_default_value is not None:
             value, requires, doc = self.cy_default_value.substitute(fc_name_to_intern_name,
                                                                     fc_name_to_cy_name)
             initcs.add_requires(('init', r) for r in requires)
             if self.pyf_hide:
                 initcs.putln("%s = %s", self.intern_name, value)
+                empty = False
             elif self.defer_init_to_body:
                 initcs.putln("%s = %s if (%s is not None) else %s",
                              self.intern_name, self.cy_name, self.cy_name,
                              value)
+                empty = False
             else:
                 pass
+        if empty and not is_in_arg and not is_return_arg and ctx.cfg.f77binding:
+            initcs.putln("%s = 0" % self.intern_name)
         return [initcs]
 
     def return_tuple_list(self, ctx):
@@ -663,7 +671,8 @@ class _CyArrayArg(_CyArgBase):
             '<%s*>np.PyArray_DATA(%s)%s' %
             (self.ktp, self.intern_name, offset_code)]
 
-    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
+    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name,
+                          is_in_arg, is_return_arg):
         d = {'intern' : self.intern_name,
              'extern' : self.cy_name,
              'dtenum' : self.npy_enum,
@@ -1120,7 +1129,9 @@ class CyProcedure(AstNode):
                 continue
             visited_args.append(arg)
             snippets.extend(arg.get_code_snippets(ctx, fc_name_to_intern_name,
-                                                  fc_name_to_cy_name))
+                                                  fc_name_to_cy_name,
+                                                  arg in self.in_args,
+                                                  arg == self.return_arg))
         # Now sort snippets by phase (for stylistic reasons -- all
         # orderings will yield correctly executing results)
         phases = ['init', 'check']
