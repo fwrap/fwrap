@@ -21,6 +21,26 @@ def all_same(iterable):
 def all_equal(iterable):
     return reduce(lambda x, y: x if x == y else unique, iterable) is not unique
 
+def space_pad(s, n):
+    if len(s) < n:
+        return s + ' ' * (n - len(s))
+    else:
+        return s
+
+def merge_proc_names(names):
+    n = max(len(name) for name in names)
+    padded_names = [space_pad(name, n) for name in names]
+    result = [None] * n
+    for i in range(n):
+        ch = padded_names[0][i]
+        if all(name[i] == ch for name in padded_names):
+            result[i] = ch
+        else:
+            result[i] = 'X'
+    if all(x == 'X' for x in result):
+        return '_'.join(names)
+    else:
+        return ''.join(result)
 
 #
 # Detect templates and insert them into an ast
@@ -53,7 +73,7 @@ def cy_deduplify(cy_ast, cfg):
             template_node = cy_create_template(procs, cfg)
         except UnableToMergeError, e:
             print names_in_group, e
-            #raise UnableToMergeError("Can not merge %r:\n%s" % (names_in_group, e))
+#            raise UnableToMergeError("Can not merge %r:\n%s" % (names_in_group, e))
             continue
         # Went OK
         processed.update(names_in_group)
@@ -62,20 +82,27 @@ def cy_deduplify(cy_ast, cfg):
         # routines
         to_sub = names_in_group[0]
         to_remove = names_in_group[1:]
-        cy_ast = [(template_node if node.name == to_sub else node)
+        cy_ast = [(template_node if node.cy_name == to_sub else node)
                   for node in cy_ast
-                  if node.name not in to_remove]
+                  if node.cy_name not in to_remove]
     return cy_ast
 
 def cy_create_template(procs, cfg):
     """Make an attempt to merge the given procedures into a template
     """
-    comment = '# Template for %s' % ', '.join(p.name for p in procs)
-    template_mgr = create_template_manager(cfg, comment)
+    template_mgr = create_template_manager(cfg)
+
+    # Make sure proc name substitution variable is easily readable.
+    # "name" will pick up the same as "cy_name" attrs, so put before
+    # merge_node_attributes
+    proc_names = [proc.cy_name for proc in procs]
+    cy_name = template_mgr.get_code_for_values(proc_names,
+                                               merge_proc_names(proc_names))
+
     merged_attrs = merge_node_attributes(procs, template_mgr,
                                          exclude=('in_args', 'out_args', 'call_args',
                                                   'aux_args', 'all_dtypes_list',
-                                                  'return_arg'))
+                                                  'return_arg', 'cy_name'))
 
     in_args = cy_merge_args([proc.in_args for proc in procs], template_mgr)
     out_args = cy_merge_args([proc.out_args for proc in procs], template_mgr)
@@ -97,6 +124,7 @@ def cy_create_template(procs, cfg):
                                 call_args=call_args,
                                 aux_args=aux_args,
                                 return_arg=return_arg,
+                                cy_name=cy_name,
                                 all_dtypes_list=sum([proc.all_dtypes() for proc in procs], []),
                                 names=[proc.cy_name for proc in procs],
                                 **merged_attrs)
