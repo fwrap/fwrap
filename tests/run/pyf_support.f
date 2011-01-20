@@ -130,3 +130,14 @@ C     Then do arr = arange(m*n).reshape(m, n)
       integer n
       integer*4 a(n), b(n), c(n)
       end subroutine alignment
+
+      subroutine scalars_initialized_to_zero(x, y, z, one, ok)
+      integer x, one
+      real*8 y
+      complex*16 z
+      logical ok
+      ok = .false.
+      if ((x == 0) .and. (y == 0) .and. (z == 0) .and. (one == 1)) then
+         ok = .true.
+      endif
+      end subroutine

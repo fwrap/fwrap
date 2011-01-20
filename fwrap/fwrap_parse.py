@@ -218,23 +218,28 @@ def _get_intent(arg, language):
     return intents[0]
 
 def _get_pyf_proc_annotations(proc):
-    from fparser.statements import Intent, CallStatement    
+    from fparser.statements import Intent, CallStatement, FortranName
     pyf_wraps_c = False
     pyf_callstatement = None
+    pyf_fortranname = None
     for line in proc.content:
         if isinstance(line, Intent) and 'C' in line.specs:
             pyf_wraps_c = True
         elif isinstance(line, CallStatement):
             pyf_callstatement = line.expr
+        elif isinstance(line, FortranName):
+            pyf_fortranname = line.value
+
     return dict(pyf_wraps_c=pyf_wraps_c,
-                pyf_callstatement=pyf_callstatement)
+                pyf_callstatement=pyf_callstatement,
+                pyf_fortranname=pyf_fortranname)
 
 def _get_pyf_arg_annotations(arg):
     # Parse Fwrap-compatible intents
+    pyf_no_return = False
     if arg.is_intent_inout():
-        # The "inout" feature of f2py is different; hiding
-        # the argument from the result tuple.
-        raise NotImplementedError("intent(inout) not supported in pyf files")
+        intent = "inout"
+        pyf_no_return = True
     elif arg.is_intent_in() and arg.is_intent_out():
         # The "in,out" feature of f2py corresponds to fwrap's inout
         intent = "inout"
@@ -283,7 +288,8 @@ def _get_pyf_arg_annotations(arg):
                        pyf_optional=arg.is_optional(),
                        pyf_depend=arg.depend,
                        pyf_align=align,
-                       pyf_by_value=pyf_by_value
+                       pyf_by_value=pyf_by_value,
+                       pyf_no_return=pyf_no_return
                        )
 
     return intent, annotations

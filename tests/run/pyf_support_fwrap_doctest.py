@@ -190,5 +190,17 @@ alignment:
     >>> align_test(5)
     (True, False, False)
 
+intent(inout):
+
+    >>> x = np.zeros(4)
+    >>> intent_inout_arange(x, 4) # no return value
+    >>> x
+    array([ 1.,  2.,  3.,  4.])
+
+initialization of scalars:
+
+    >>> scalars_initialized_to_zero()
+    (0, 0.0, 0j, 1)
+
 """
 

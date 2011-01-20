@@ -560,6 +560,7 @@ class Argument(AstNode):
     pyf_optional = False
     pyf_align = None
     pyf_by_value = False
+    pyf_no_return = False
 
     def _update(self):
         self._var = Var(name=self.name, dtype=self.dtype,
@@ -735,6 +736,7 @@ class Procedure(AstNode):
     kind = None
     pyf_callstatement = None
     pyf_wraps_c = False
+    pyf_fortranname = None
 
     def _validate(self, name, language, **kw):
         assert language in ('fortran', 'pyf')

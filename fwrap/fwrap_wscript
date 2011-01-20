@@ -114,7 +114,7 @@ def build(bld):
         bld(
             name = 'generate_typemap',
             rule = task_generate_typemap_f77binding,
-            target = [modmap.typemap_h, modmap.typemap_pxd, modmap.typemap_pxi]
+            target = [modmap.typemap_h, modmap.typemap_pxd]
             )
         bld(
             after = 'generate_typemap',
@@ -270,11 +270,12 @@ class modmap(Task.Task):
         ktp_in = [ip for ip in self.inputs if ip.name.endswith('.in')][0]
         ctps = gc.read_type_spec(ktp_in.abspath())
         find_types(bld, ctps)
-        gen_type_map_files(ctps, self.outputs, write_f90_mod=True)
+        gen_type_map_files(ctps, self.outputs, write_f90_mod=True,
+                           write_pxi=True)
 
 from fwrap import gen_config as gc
 
-def gen_type_map_files(ctps, outputs, write_f90_mod):
+def gen_type_map_files(ctps, outputs, write_f90_mod, write_pxi):
     def find_by_ext(lst, ext):
         newlst = [x for x in lst if x.name.endswith(ext)]
         if len(newlst) != 1:
@@ -286,7 +287,8 @@ def gen_type_map_files(ctps, outputs, write_f90_mod):
         gc.write_f_mod(ctps, find_by_ext(outputs, '.f90'))
     gc.write_header(ctps, find_by_ext(outputs, '.h'))
     gc.write_pxd(ctps, find_by_ext(outputs, '.pxd'), header_name)
-    gc.write_pxi(ctps, find_by_ext(outputs, '.pxi'))
+    if write_pxi:
+        gc.write_pxi(ctps, find_by_ext(outputs, '.pxi'))
 
 def find_types(bld, ctps):
     for ctp in ctps:
@@ -390,7 +392,8 @@ int main(int argc, char **argv)
 def task_generate_typemap_f77binding(task):
     from fwrap.f77_config import get_f77_ctps
     ctps = get_f77_ctps()
-    gen_type_map_files(ctps, task.outputs, write_f90_mod=False)
+    gen_type_map_files(ctps, task.outputs, write_f90_mod=False,
+                       write_pxi=False)
 
 #
 # Templates

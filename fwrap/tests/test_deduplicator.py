@@ -56,3 +56,6 @@ def test_tempita_manager():
     eq_(mgr.get_code_for_values([1,2,4], 'pre'), '{{sub2}}')
     eq_(mgr.get_code_for_values([1,2,4,5], 'pre'), '{{pre}}')
     
+def test_merge_proc_names():
+    eq_(merge_proc_names(['dgees', 'zgees', 'cgees']), 'Xgees')
+    eq_(merge_proc_names(['dgees', 'foo']), 'dgees_foo')

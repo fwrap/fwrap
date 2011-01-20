@@ -109,6 +109,7 @@ def get_out_args(args):
     return [arg for arg in args
             if (not arg.pyf_hide and
                 arg.intent in ('out', 'inout', None) and
+                not arg.pyf_no_return and
                 not isinstance(arg, _CyErrStrArg))]
 
 def get_aux_args(args):
@@ -138,11 +139,14 @@ def generate_cy_pyx(ast, name, buf, cfg):
         ast = cy_deduplify(ast, cfg)    
     buf.putln("#cython: ccomplex=True")
     buf.putln(' ')
-    put_cymod_docstring(ast, name, buf)
+    put_cymod_docstring(ast, name, buf, cfg)
     buf.putln("np.import_array()")
-    buf.putln("include 'fwrap_ktp.pxi'")
+    if not cfg.f77binding:
+        buf.putln("include 'fwrap_ktp.pxi'")
     gen_cimport_decls(buf)
     gen_cdef_extern_decls(buf)
+    if cfg.f77binding:
+        buf.putln('__all__ = %s' % repr([proc.cy_name for proc in ast]))
     for proc in ast:
         ctx.language = proc.language
         assert ctx.language in ('fortran', 'pyf')
@@ -156,15 +160,15 @@ def generate_cy_pyx(ast, name, buf, cfg):
     cfg.serialize_to_pyx(buf)
     buf.putln('')
 
-def put_cymod_docstring(ast, modname, buf):
-    dstring = get_cymod_docstring(ast, modname)
+def put_cymod_docstring(ast, modname, buf, cfg):
+    dstring = get_cymod_docstring(ast, modname, cfg)
     buf.putln('"""' + dstring[0])
     buf.putlines(dstring[1:])
     buf.putempty()
     buf.putln('"""')
 
 # XXX:  Put this in a cymodule class?
-def get_cymod_docstring(ast, modname):
+def get_cymod_docstring(ast, modname, cfg):
     from fwrap.version import get_version
     from fwrap.gen_config import all_dtypes
     dstring = ("""\
@@ -184,14 +188,14 @@ For usage information see the function docstrings.
     names = ["%s(...)" % name for name in names]
     dstring += names
 
-    dstring += [""]
-
-    dstring += ["Data Types",
+    if not cfg.f77binding:
+        dstring += [""]
+        dstring += ["Data Types",
                 "----------"]
-    # Datatypes
-    dts = all_dtypes(ast)
-    names = sorted([dt.py_type_name() for dt in dts if dt.fw_ktp is not None])
-    dstring += names
+        # Datatypes
+        dts = all_dtypes(ast)
+        names = sorted([dt.py_type_name() for dt in dts if dt.fw_ktp is not None])
+        dstring += names
 
     return dstring
 
@@ -209,6 +213,7 @@ class _CyArgBase(AstNode):
     pyf_optional = False
     pyf_align = None
     pyf_by_value = False
+    pyf_no_return = False
     
     cy_default_value = None # or CythonExpression
 
@@ -240,7 +245,8 @@ class _CyArgBase(AstNode):
     def is_optional(self):
         return (self.cy_default_value is not None or self.pyf_default_value is not None)
 
-    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
+    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name,
+                          is_in_arg, is_return_arg):
         yield CodeSnippet(('init', self.intern_name))
 
 class _CyArg(_CyArgBase):
@@ -308,7 +314,7 @@ class _CyArg(_CyArgBase):
         else:
             typedecl = self.intern_typedecl
         if self.intern_typedecl is not None or not extern_decl_made:
-            return ["cdef %s %s" % (typedecl, self.intern_name)]
+            return [(typedecl, self.intern_name)]
         else:
             return []
 
@@ -324,25 +330,32 @@ class _CyArg(_CyArgBase):
     def pre_call_code(self, ctx):
         return []
     
-    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
+    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name,
+                          is_in_arg, is_return_arg):
         # Initialization code
         initcs = CodeSnippet(('init', self.intern_name))
+        empty = True
         if (self.dtype is not None and self.dtype.type == 'logical' and
             self.intent in ('in', 'inout', None)):
             # emulates PyObject_IsTrue used by f2py:
             initcs.put('%s = 1 if %s else 0' % (self.intern_name, self.cy_name))
+            empty = False
         if self.cy_default_value is not None:
             value, requires, doc = self.cy_default_value.substitute(fc_name_to_intern_name,
                                                                     fc_name_to_cy_name)
             initcs.add_requires(('init', r) for r in requires)
             if self.pyf_hide:
                 initcs.putln("%s = %s", self.intern_name, value)
+                empty = False
             elif self.defer_init_to_body:
                 initcs.putln("%s = %s if (%s is not None) else %s",
                              self.intern_name, self.cy_name, self.cy_name,
                              value)
+                empty = False
             else:
                 pass
+        if empty and not is_in_arg and not is_return_arg and ctx.cfg.f77binding:
+            initcs.putln("%s = 0" % self.intern_name)
         return [initcs]
 
     def return_tuple_list(self, ctx):
@@ -351,7 +364,7 @@ class _CyArg(_CyArgBase):
         return [self.intern_name]
 
     def docstring_return_tuple_list(self):
-        return _CyArg.return_tuple_list(self, ctx=None)
+        return [self.cy_name]
 
     def _gen_dstring(self):
         dstring = ("%s : %s" %
@@ -381,7 +394,7 @@ class _CySingleCharArg(_CyArg):
         return "object"
 
     def intern_declarations(self, ctx, extern_decl_made):
-        return ['cdef char *%s = [0, 0]' % self.buf_name]
+        return [('char', '*%s = [0, 0]' % self.buf_name)]
 
     def pre_call_code(self, ctx):
         ctx.use_utility_code(as_char_utility_code)        
@@ -430,10 +443,10 @@ class _CyStringArg(_CyArg):
 
     def intern_declarations(self, ctx, extern_decl_made):
         # TODO: Check extern_decl_made here?
-        ret = ['cdef %s %s' % (self.cy_dtype_name, self.intern_name),
-                'cdef fw_shape_t %s' % self.intern_len_name]
+        ret = [(self.cy_dtype_name, self.intern_name),
+               ('fw_shape_t', self.intern_len_name)]
         if self.intent in ('out', 'inout', None):
-            ret.append('cdef char *%s' % self.intern_buf_name)
+            ret.append(('char', '*%s' % self.intern_buf_name))
         return ret
 
     def get_len(self):
@@ -524,8 +537,8 @@ class _CyErrStrArg(_CyArgBase):
         return []
 
     def intern_declarations(self, ctx, extern_decl_made):
-        return ['cdef fw_character_t %s[%s]' %
-                    (self.cy_name, constants.ERRSTR_LEN)]
+        return [('fw_character_t', '%s[%s]' %
+                 (self.cy_name, constants.ERRSTR_LEN))]
 
     def call_arg_list(self, ctx):
         return [self.cy_name]
@@ -584,6 +597,7 @@ class _CyArrayArg(_CyArgBase):
     def _update(self):
         from fwrap.gen_config import py_type_name_from_type
         self.intern_name = '%s_' % self.cy_name
+        self.shape_name = '%s_shape' % self.cy_name
 
         # In the special case of explicit-shape intent(out) arrays,
         # find the expressions for constructing the output argument
@@ -642,7 +656,8 @@ class _CyArrayArg(_CyArgBase):
         return [('object %s' % self.cy_name, default)]
 
     def intern_declarations(self, ctx, extern_decl_made):
-        decls = ["cdef np.ndarray %s" % self.intern_name]
+        decls = [('np.ndarray', self.intern_name),
+                 ('np.npy_intp', '%s[%d]' % (self.shape_name, self.ndims))]
         return decls            
 
     def _get_py_dtype_name(self):
@@ -656,17 +671,19 @@ class _CyArrayArg(_CyArgBase):
         if ctx.cfg.f77binding:
             shape_args = []
         else:
-            shape_args = ['np.PyArray_DIMS(%s)' % self.intern_name]
+            shape_args = [self.shape_name]
         return shape_args + [
             '<%s*>np.PyArray_DATA(%s)%s' %
             (self.ktp, self.intern_name, offset_code)]
 
-    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name):
+    def get_code_snippets(self, ctx, fc_name_to_intern_name, fc_name_to_cy_name,
+                          is_in_arg, is_return_arg):
         d = {'intern' : self.intern_name,
              'extern' : self.cy_name,
              'dtenum' : self.npy_enum,
              'ndim' : self.ndims,
-             'alignstr' : '' if self.pyf_align is None else ', %d' % self.pyf_align}
+             'alignstr' : '' if self.pyf_align is None else ', %d' % self.pyf_align,
+             'shapevar' : self.shape_name}
         # Can we allocate the out-array ourselves? Currently this
         # involves trying to parse the size expression to see if it
         # is simple enough.
@@ -706,8 +723,6 @@ class _CyArrayArg(_CyArgBase):
                     requires.update(dimrequires)
             else:
                 shape_info.append(None)
-        if can_allocate:
-            d['shape'] = ', '.join(expr for expr, _, _ in shape_info)
 
         # Figure out the copy flag
         if self.pyf_overwrite_flag:
@@ -730,23 +745,21 @@ class _CyArrayArg(_CyArgBase):
         cs = CodeSnippet(('init', self.intern_name),
                          [('init', r) for r in requires])
 
+        if can_allocate and self.pyf_hide:
+            d['extern'] = 'None'
+        d['create'] = bool(can_allocate)
         if can_allocate:
-            if self.pyf_hide:
-                d['from'] = 'None'
-            else:
-                d['from'] = self.cy_name
-            ctx.use_utility_code(explicit_shape_array_utility_code)
-            cs.putln('%(intern)s, %(extern)s = fw_explicitshapearray(%(from)s, %(dtenum)s, '
-                     '%(ndim)d, [%(shape)s], %(copy)s%(alignstr)s)' % d)
-        else:
-            cs.putln('%(intern)s, %(extern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '
-                     '%(ndim)d, %(copy)s%(alignstr)s)' % d)
+            cs.putln('; '.join('%s[%d] = %s' % (self.shape_name, idx, expr)
+                               for idx, (expr, _, _) in enumerate(shape_info)))
+        cs.putln('%(intern)s = fw_asfortranarray(%(extern)s, %(dtenum)s, '
+                 '%(ndim)d, %(shapevar)s, %(copy)s, %(create)s%(alignstr)s)' % d)
         yield cs
 
         #
-        # Code for checking explicit shapes in f77binding mode
+        # Code for checking explicit shapes in f77binding mode.
+        # Not needed when the array is a buffer we allocated ourselves.
         #
-        if ctx.cfg.f77binding:
+        if ctx.cfg.f77binding and not (can_allocate and self.pyf_hide):
             cs = CodeSnippet(('check', self.intern_name),
                              [('init', self.intern_name)])
             for idx, info in enumerate(shape_info):
@@ -761,13 +774,13 @@ class _CyArrayArg(_CyArgBase):
                     # last dimension, can truncate
                     cs.put(
                         '''\
-    if not (0 <= %(expr)s <= np.PyArray_DIMS(%(intern)s)[%(idx)d]%(mem_offset_code)s):
+    if not (0 <= %(expr)s <= %(shapevar)s[%(idx)d]%(mem_offset_code)s):
         raise ValueError("(0 <= %(doc)s <= %(extern)s.shape[%(idx)d]%(mem_offset_code)s) not satisifed")
                     ''' % d)
                 else:
                     cs.put(
                         '''\
-    if %(expr)s != np.PyArray_DIMS(%(intern)s)[%(idx)d]:
+    if %(expr)s != %(shapevar)s[%(idx)d]:
         raise ValueError("(%(doc)s == %(extern)s.shape[%(idx)d]) not satisifed")
                     ''' % d)
             yield cs
@@ -782,7 +795,7 @@ class _CyArrayArg(_CyArgBase):
         if self.intent in ('out', 'inout', None):
             # fw_asfortranarray returns tuple with internal and external view,
             # and we return the external one
-            return [self.cy_name]
+            return [self.intern_name]
         return []
 
     def _gen_dstring(self):
@@ -823,8 +836,8 @@ class CyCharArrayArg(_CyArrayArg):
 
     def intern_declarations(self, ctx, extern_decl_made):
         ret = super(CyCharArrayArg, self).intern_declarations(ctx, extern_decl_made)
-        return ret + ["cdef fw_shape_t %s[%d]" %
-                (self.shape_name, self.ndims+1)]
+        return ret + [('fw_shape_t', '%s[%d]' %
+                       (self.shape_name, self.ndims+1))]
 
     def pre_call_code(self, ctx):
         tmpl = ("%(odtype)s = %(name)s.dtype\n"
@@ -1040,6 +1053,7 @@ class CyProcedure(AstNode):
     checks = ()
     pyf_pre_call_code = None
     pyf_post_call_code = None
+    pyf_fortranname = None
 
     # Only used in f77binding (otherwise the function is wrapped
     # to become a subprocedure instead). The return_arg should
@@ -1095,9 +1109,11 @@ class CyProcedure(AstNode):
         return proc_call
 
     def temp_declarations(self, buf, ctx):
-        decls = self.arg_mgr.intern_declarations(ctx)
-        for line in decls:
-            buf.putln(line)
+        decls_by_type = {}
+        for typepart, namepart in self.arg_mgr.intern_declarations(ctx):
+            decls_by_type.setdefault(typepart, []).append(namepart)
+        for typepart, nameparts in decls_by_type.iteritems():
+            buf.putln('cdef %s %s' % (typepart, ', '.join(nameparts)))
 
     def return_tuple(self, ctx):
         ret_arg_list = []
@@ -1194,7 +1210,9 @@ class CyProcedure(AstNode):
                 continue
             visited_args.append(arg)
             snippets.extend(arg.get_code_snippets(ctx, fc_name_to_intern_name,
-                                                  fc_name_to_cy_name))
+                                                  fc_name_to_cy_name,
+                                                  arg in self.in_args,
+                                                  arg == self.return_arg))
         # Now sort snippets by phase (for stylistic reasons -- all
         # orderings will yield correctly executing results)
         phases = ['init', 'check']
@@ -1259,6 +1277,11 @@ class CyProcedure(AstNode):
 
         return dstring
 
+    def get_fortran_name(self):
+        if self.pyf_fortranname is not None:
+            return self.pyf_fortranname
+        else:
+            return self.name
 
 class CythonExpression(object):
     """
@@ -1269,10 +1292,11 @@ class CythonExpression(object):
     call substitute with a map from Fortran name of
     arguments/variables to the equivalent in generated Cython code.
     """
-    def __init__(self, template, requires, doc=''):
+    def __init__(self, template, requires, doc='', is_literal=None):
         self.template = template
         self.requires = requires
         self.doc = doc
+        self._is_literal = is_literal
 
     def substitute(self, variable_map, doc_variable_map=None):
         if doc_variable_map is None:
@@ -1282,12 +1306,15 @@ class CythonExpression(object):
                 self.doc % doc_variable_map)
 
     def is_literal(self):
-        try:
-            self.as_literal()
-        except ValueError:
-            return False
+        if self._is_literal is None:
+            try:
+                self.as_literal()
+            except ValueError:
+                return False
+            else:
+                return True
         else:
-            return True
+            return self._is_literal
 
     def as_literal(self):
         try:
@@ -1312,68 +1339,71 @@ class CythonExpression(object):
         return "<CythonExpression %r (depends: %r)>" % (self.template, self.requires)
 
 
-explicit_shape_array_utility_code = u"""
-cdef object fw_explicitshapearray(object value, int typenum, int ndim,
-                                  np.intp_t *shape, bint copy, int alignment=1):
-    if value is None:
-        result = np.PyArray_ZEROS(ndim, shape, typenum, 1)
-        return result, result 
-    else:
-        return fw_asfortranarray(value, typenum, ndim, copy, alignment)
-"""
-
 as_fortran_array_utility_code = u"""
-cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy,
-                              int alignment=1):
+cdef np.ndarray fw_asfortranarray(object value, int typenum, int ndim,
+                                  np.intp_t * shape, bint copy,
+                                  bint create, int alignment=1):
     cdef int flags = np.NPY_F_CONTIGUOUS
-    if ndim <= 1:
-        # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
-        flags |= np.NPY_C_CONTIGUOUS
-    if (not copy and alignment > 1 and np.PyArray_Check(value) and
-        (<Py_ssize_t>np.PyArray_DATA(value) & (alignment - 1) != 0)):
-        # mis-aligned array
-        copy = True    
-    if copy:
-        flags |= np.NPY_ENSURECOPY
-    result = np.PyArray_FROMANY(value, typenum, ndim, ndim, flags)
-    return result, result
+    cdef int i
+    cdef np.npy_intp *result_shape
+    cdef np.ndarray result
+    if value is None:
+        if create:
+            result = np.PyArray_ZEROS(ndim, shape, typenum, 1)
+        else:
+            raise TypeError('Expected array but None provided')
+    else:
+        if ndim <= 1:
+            # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
+            flags |= np.NPY_C_CONTIGUOUS
+        if (not copy and alignment > 1 and np.PyArray_Check(value) and
+            (<Py_ssize_t>np.PyArray_DATA(value) & (alignment - 1) != 0)):
+            # mis-aligned array
+            copy = True    
+        if copy:
+            flags |= np.NPY_ENSURECOPY
+        result = np.PyArray_FROMANY(value, typenum, ndim, ndim, flags)
+        result_shape = np.PyArray_DIMS(result)
+        for i in range(ndim):
+            shape[i] = result_shape[i]
+    return result
 """
 
 as_fortran_array_f2pystyle_utility_code = u"""
-cdef object fw_asfortranarray(object value, int typenum, int ndim, bint copy,
-                              int alignment=1):
+cdef np.ndarray fw_asfortranarray(object value, int typenum, int ndim,
+                                  np.intp_t * coerced_shape,
+                                  bint copy, bint create, int alignment=1):
     cdef int flags = np.NPY_F_CONTIGUOUS | np.NPY_FORCECAST
-    cdef np.npy_intp out_shape[np.NPY_MAXDIMS]
-    cdef np.PyArray_Dims out_dims
     cdef np.ndarray result
     cdef np.npy_intp * in_shape
     cdef int in_ndim
     cdef int i
-    if ndim <= 1:
-        # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
-        flags |= np.NPY_C_CONTIGUOUS
-    if (not copy and alignment > 1 and np.PyArray_Check(value) and
-        (<Py_ssize_t>np.PyArray_DATA(value) & (alignment - 1) != 0)):
-        # mis-aligned array
-        copy = True
-    if copy:
-        flags |= np.NPY_ENSURECOPY
-    result = np.PyArray_FROMANY(value, typenum, 0, 0, flags)
-    in_ndim = np.PyArray_NDIM(result)
-    if in_ndim == ndim:
-        return result, result
-    elif in_ndim > ndim:
-        raise ValueError("Dimension of array must be <= %d" % ndim)
+    if value is None:
+        if create:
+            result = np.PyArray_ZEROS(ndim, coerced_shape, typenum, 1)
+        else:
+            raise TypeError('Expected array but None provided')
     else:
-        # Make view where shape is padded with ones on right side
-        in_shape = np.PyArray_DIMS(result)
-        for i in range(in_ndim):
-            out_shape[i] = in_shape[i]
-        for i in range(in_ndim, ndim):
-            out_shape[i] = 1
-        out_dims.ptr = out_shape
-        out_dims.len = ndim
-        return np.PyArray_Newshape(result, &out_dims, np.NPY_FORTRANORDER), result
+        if ndim <= 1:
+            # See http://projects.scipy.org/numpy/ticket/1691 for why this is needed
+            flags |= np.NPY_C_CONTIGUOUS
+        if (not copy and alignment > 1 and np.PyArray_Check(value) and
+            (<Py_ssize_t>np.PyArray_DATA(value) & (alignment - 1) != 0)):
+            # mis-aligned array
+            copy = True
+        if copy:
+            flags |= np.NPY_ENSURECOPY
+        result = np.PyArray_FROMANY(value, typenum, 0, 0, flags)
+    in_ndim = np.PyArray_NDIM(result)
+    if in_ndim > ndim:
+        raise ValueError("Dimension of array must be <= %d" % ndim)
+    in_shape = np.PyArray_DIMS(result)
+    for i in range(in_ndim):
+        coerced_shape[i] = in_shape[i]
+    for i in range(in_ndim, ndim):
+        # Pad shape with ones on right side if necessarry
+        coerced_shape[i] = 1
+    return result
 """
 
 
