@@ -22,11 +22,15 @@ class CythonCodeGenerationContext:
         from fwrap.configuration import Configuration
         assert isinstance(cfg, Configuration)
         self.utility_codes = set()
+        self.imports = set()
         self.language = None
         self.cfg = cfg
 
     def use_utility_code(self, snippet):
         self.utility_codes.add(snippet)
+
+    def use_import(self, s):
+        self.imports.add(s)
 
 def wrap_fc(ast):
     ret = []
@@ -134,25 +138,37 @@ def gen_cdef_extern_decls(buf):
 
 def generate_cy_pyx(ast, name, buf, cfg):
     from fwrap.deduplicator import cy_deduplify
+    header_buf = CodeBuffer()
+    procs_buf = CodeBuffer()
+
+    # Header
     ctx = CythonCodeGenerationContext(cfg)
     if cfg.detect_templates:
         ast = cy_deduplify(ast, cfg)    
-    buf.putln("#cython: ccomplex=True")
-    buf.putln(' ')
-    put_cymod_docstring(ast, name, buf, cfg)
-    buf.putln("np.import_array()")
+    header_buf.putln("#cython: ccomplex=True")
+    header_buf.putln(' ')
+    put_cymod_docstring(ast, name, header_buf, cfg)
+    header_buf.putln("np.import_array()")
     if not cfg.f77binding:
-        buf.putln("include 'fwrap_ktp.pxi'")
-    gen_cimport_decls(buf)
-    gen_cdef_extern_decls(buf)
-    if cfg.f77binding:
-        buf.putln('__all__ = %s' % repr([proc.cy_name for proc in ast]))
+        header_buf.putln("include 'fwrap_ktp.pxi'")
+    gen_cimport_decls(header_buf)
+
+    # Procs
     for proc in ast:
         ctx.language = proc.language
         assert ctx.language in ('fortran', 'pyf')
-        proc.generate_wrapper(ctx, buf)
-        buf.putln(' ')
-        buf.putln(' ')
+        proc.generate_wrapper(ctx, procs_buf)
+        procs_buf.putln(' ')
+        procs_buf.putln(' ')
+        
+    # Assemble
+    buf.putblock(header_buf.getvalue())    
+    for s in ctx.imports:
+        buf.putline(s)
+    if cfg.f77binding:
+        buf.putln('__all__ = %s' % repr([proc.cy_name for proc in ast]))    
+    gen_cdef_extern_decls(buf)
+    buf.putblock(procs_buf.getvalue())
     for utilcode in ctx.utility_codes:
         buf.putblock(utilcode)
     buf.putln('')
