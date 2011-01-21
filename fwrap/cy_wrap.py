@@ -977,24 +977,52 @@ class CyCallbackArg(_CyArg):
                                                     ndim=len(dim.dims),
                                                     shape='%s_shape' % extern,
                                                     enum=dtype.npy_enum))
-        # Build call arg str (dereference scalars)
-        call_exprs = []
+        # Build call arg str (dereference scalars). We treat *all*
+        # arguments as inout arguments for now, and leave this to
+        # manual modification -- Fortran 77 simply does not have
+        # enough information
+        call_args = []
+        ret_args = []
         for extern, dtype, dims in cb_args:
             intern = '%s_' % extern
+            ret = '%s_ret' % extern
             if dims is None:
-                call_exprs.append('%s[0]' % extern)
+                call_args.append('%s[0]' % extern)
+                ret_args.append('%s[0]' % extern)
             else:
-                call_exprs.append(intern)
-        vs.update(call_args=', '.join(call_exprs))
+                call_args.append(intern)
+                ret_args.append(ret)
+        vs.update(call_args=', '.join(call_args),
+                  ret_args=', '.join(ret_args))
 
         buf.putlines(dedent('''\
         if info.extra_args is None:
-            info.callback(%(call_args)s)
+            %(ret_args)s = info.callback(%(call_args)s)
         else:
-            info.callback(%(call_args)s, *info.extra_args)
+            %(ret_args)s = info.callback(%(call_args)s, *info.extra_args)
+        ''') % vs)
+        for extern, dtype, dim in cb_args:
+            intern = '%s_' % extern
+            ret = '%s_ret' % extern
+            if dim is not None:
+                ndim = len(dim.dims)
+                flags = ('np.NPY_C_CONTIGUOUS|np.NPY_F_CONTIGUOUS' if ndim == 1
+                         else 'np.NPY_F_CONTIGUOUS')
+                shape_do_not_match = ' or '.join('%s_shape[%d] != np.PyArray_DIMS(%s)[%d]' %
+                                                 (extern, idx, intern, idx) for idx in range(ndim))
+                npy_enum = dtype.npy_enum
+                buf.putlines(dedent('''\
+                if %(intern)s is not %(ret)s:
+                    %(intern)s = np.PyArray_FROMANY(%(ret)s, %(npy_enum)s, %(ndim)d, %(ndim)d, %(flags)s)
+                    if %(shape_do_not_match)s:
+                        raise ValueError("Array returned from callback has illegal shape")
+                    memcpy(%(extern)s, np.PyArray_DATA(%(intern)s), np.PyArray_NBYTES(%(intern)s))
+                ''') % locals())
+            
+        buf.putlines(dedent('''\
         %(global_info)s = info            
         return 0
-                ''') % vs)
+        ''') % vs)
         buf.dedent()
         buf.putlines(dedent('''\
         except:
@@ -1577,6 +1605,9 @@ cdef extern from "setjmp.h":
         pass    
     int setjmp(jmp_buf env)
     void longjmp(jmp_buf env, int val)
+
+cdef extern from "string.h":
+    void *memcpy(void *dest, void *src, int n)
 
 cdef class fw_CallbackInfo(object):
     # Callable object to call

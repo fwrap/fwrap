@@ -15,6 +15,9 @@ def callback(a, b, n):
     print b
     print type(n)
     print n
+    rb = b.copy()
+    rb[...] = 2
+    return 10, rb, n
 
 class Nested(object):
     def __init__(self, action=lambda: None):
@@ -26,6 +29,7 @@ class Nested(object):
         assertarr(b, n)
         self.trace.append('(3)')
         self.action()
+        return a, b, n
 
     def level2(self, a, b, n):
         assert a == 4 and n == 2
@@ -38,6 +42,7 @@ class Nested(object):
         except:
             self.trace.append('2@')
             raise
+        return a, b, n
 
     def level1(self, a, b, n):
         assert a == 1 and n == 1
@@ -50,6 +55,7 @@ class Nested(object):
         except:
             self.trace.append('1@')
             raise
+        return a, b, n
 
     def run(self):
         caller(self.level1, 1, getarr(1), 1)
@@ -69,6 +75,9 @@ def raise_MyException_2():
 def raise_MyException_3():
     raise MyException('message')
 
+def wrongshape(a, b, n):
+    return a, [[0]], n
+
 __doc__ = u"""
     >>> n = 3
     >>> a = 10
@@ -83,28 +92,34 @@ __doc__ = u"""
     <type 'int'>
     3
 
-    >>> n = Nested(); n.run(); n
+    >>> m = Nested(); m.run(); m
     <1 <2 (3) (3) 2> <2 (3) (3) 2> 1>
 
-    >>> n = Nested(raise_MyException_1); n.run()
+    >>> m = Nested(raise_MyException_1); m.run()
     Traceback (most recent call last):
         ...
     MyException
-    >>> n
+    >>> m
     <1 <2 (3) 2@ 1@
 
-    >>> n = Nested(raise_MyException_2); n.run()
+    >>> m = Nested(raise_MyException_2); m.run()
     Traceback (most recent call last):
         ...
     MyException: message
-    >>> n
+    >>> m
     <1 <2 (3) 2@ 1@
 
-    >>> n = Nested(raise_MyException_3); n.run()
+    >>> m = Nested(raise_MyException_3); m.run()
     Traceback (most recent call last):
         ...
     MyException: message
-    >>> n
+    >>> m
     <1 <2 (3) 2@ 1@
+
+
+    >>> caller(wrongshape, a, b, n)
+    Traceback (most recent call last):
+        ...
+    ValueError: Array returned from callback has illegal shape
     
 """
