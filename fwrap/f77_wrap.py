@@ -56,7 +56,7 @@ def iface_proc_to_cy_proc(proc):
     if proc.kind == 'function':
         if proc.return_arg.dimension is not None:
             raise AssertionError()
-        return_arg = cy_arg_factory(proc.return_arg, False)
+        return_arg = cy_arg_factory(proc.return_arg, False, cy_name)
         return_arg.update(intent='out',
                           cy_name=constants.RETURN_ARG_NAME)
         return_args = [return_arg]

@@ -12,6 +12,7 @@ from fwrap.astnode import AstNode
 
 import re
 from warnings import warn
+from textwrap import dedent
 
 plain_sizeexpr_re = re.compile(r'\(([a-zA-Z0-9_]+)\)')
 default_array_value_re = re.compile(r'^[()0.,\s]+$') # variations of zero...
@@ -165,12 +166,16 @@ def generate_cy_pyx(ast, name, buf, cfg):
     buf.putblock(header_buf.getvalue())    
     for s in ctx.imports:
         buf.putline(s)
+    for utilcode in ctx.utility_codes:
+        if utilcode.leading:
+            buf.putblock(utilcode.code)
     if cfg.f77binding:
         buf.putln('__all__ = %s' % repr([proc.cy_name for proc in ast]))    
     gen_cdef_extern_decls(buf)
     buf.putblock(procs_buf.getvalue())
     for utilcode in ctx.utility_codes:
-        buf.putblock(utilcode)
+        if not utilcode.leading:
+            buf.putblock(utilcode.code)
     buf.putln('')
     buf.putln('# Fwrap configuration:')
     cfg.serialize_to_pyx(buf)
@@ -901,6 +906,7 @@ class CyCallbackArg(_CyArg):
         self.callback_core_name = '%swrapper_core' % self.callback_wrapper_basename
         self.callback_wrapper_name = '%swrapper' % self.callback_wrapper_basename
         self.callback_info_name = '%sinfo' % self.callback_wrapper_basename
+        self.local_info_name = 'fw_%s_cb' % self.cy_name
 
     def call_arg_list(self, ctx):
         return ['&%s' % self.callback_wrapper_name]
@@ -912,55 +918,99 @@ class CyCallbackArg(_CyArg):
         return 'object'
 
     def generate_callback_wrapper(self, ctx, buf):
+        ctx.use_import('import sys')
         ctx.use_utility_code(callback_utility_code)
-        arg_names = ['arg%d' % idx for idx in range(len(self.dtype.arg_dtypes))]
         arg_decls = ['%s %s' % (t.c_declaration(), name)
-                     for t, name in zip(self.dtype.arg_dtypes, arg_names)]
-        for arg_dtype in self.dtype.arg_dtypes:
-            print arg_dtype.__dict__
-        has_arrays = any(arg_dtype.dimension is not None
-                         for arg_dtype in self.dtype.arg_dtypes)
-##         for arg_dtype in self.dtype.arg_dtypes:
-##             if arg_dtype.dimension is not None:
-##                 ndim = arg.
-##             array_creation.append(
-##                 'np.PyArray_New(&np.PyArray_Type, %(ndim)d, '
-##             PyArrayObject *tmp_arr = (PyArrayObject *)PyArray_New(&PyArray_Type,1,x_Dims,PyArray_DOUBLE,NULL,(char*)x,0,NPY_FARRAY,NULL); /*XXX: Hmm, what will destroy this array??? */
-            
-        d.update(arg_decls=', '.join(arg_decls),
-                 arg_names=', '.join(arg_names),
-                 global_info=self.callback_info_name,
-                 wrapper_core=self.callback_core_name,
-                 wrapper=self.callback_wrapper_name)
-        buf.put('''
+                     for t, name in zip(self.dtype.arg_dtypes,
+                                        self.dtype.arg_names)]
+
+        intern_names = ['%s_' % name for name in self.dtype.arg_names]
+        cb_args = zip(self.dtype.arg_names,
+                      self.dtype.arg_dtypes,
+                      self.dtype.arg_dims)
+
+        array_args = []
+        for name, dtype, dim in cb_args:
+            if dim is not None:
+                array_args.append((name, '%s_' % name, dtype, dim))
+        vs = {}
+        vs.update(arg_decls=', '.join(arg_decls),
+                  arg_names=', '.join(self.dtype.arg_names),
+                  global_info=self.callback_info_name,
+                  wrapper_core=self.callback_core_name,
+                  wrapper=self.callback_wrapper_name)
+        buf.putblock(dedent('''
         cdef fw_CallbackInfo %(global_info)s
-        cdef int %(wrapper_core)(%(arg_decls)s):
+        cdef int %(wrapper_core)s(%(arg_decls)s):
             global %(global_info)s;
             cdef fw_CallbackInfo info
-        ''' % d)
+        ''' % vs))
         buf.indent()
-        if has_arrays:
-            buf.putln('cdef np.npy_intp shape[np.NPY_MAXDIMS]')
-        buf.put('''
-            info = %(global_info)s;
+        buf.putln('cdef np.ndarray %s' % ', '.join([internname
+                                                    for name, internname, dtype, dim
+                                                    in array_args]))
+        buf.putln('cdef np.npy_intp %s' % ', '.join(['%s_shape[%d]' % (name, len(dim.dims))
+                                                    for name, internname, dtype, dim
+                                                    in array_args]))
+        buf.putlines(dedent('''\
+            info = %(global_info)s
             try:
-            ''')
+            ''' % vs))
         buf.indent()
-        for arg_dtype in self.dtype.arg_dtypes:
-            dimension = arg_dtype.dimension
-            if dimension is not None:
-                print dimension()
-        buf.put('''
-                        if info.extra_args is None:
-                    info.callback()
-                ''')
+
+        def parse_sizeexpr(s):
+            # Extremely simple for now
+            assert s[0] == '(' and s[-1] == ')'
+            s = s[1:-1]
+            assert ' ' not in s
+            return '%s[0]' % s
+        
+        # Allocate array wrapper objects
+        for extern, intern, dtype, dim in array_args:
+            exprs = [parse_sizeexpr(d.sizeexpr) for d in dim.dims]
+            buf.putln('; '.join('%s_shape[%d] = %s' % (name, idx, expr)
+                                for idx, expr in enumerate(exprs)))
+            buf.putln('%(intern)s = np.PyArray_New(&np.PyArray_Type, %(ndim)d, '
+                      '%(shape)s, %(enum)s, NULL, <char*>%(extern)s, 0, '
+                      'np.NPY_FARRAY, NULL)' % dict(intern=intern,
+                                                    extern=extern,
+                                                    ndim=len(dim.dims),
+                                                    shape='%s_shape' % extern,
+                                                    enum=dtype.npy_enum))
+        # Build call arg str (dereference scalars)
+        call_exprs = []
+        for extern, dtype, dims in cb_args:
+            intern = '%s_' % extern
+            if dims is None:
+                call_exprs.append('%s[0]' % extern)
+            else:
+                call_exprs.append(intern)
+        vs.update(call_args=', '.join(call_exprs))
+
+        buf.putlines(dedent('''\
+        if info.extra_args is None:
+            info.callback(%(call_args)s)
+        else:
+            info.callback(%(call_args)s, *info.extra_args)
+        %(global_info)s = info            
+        return 0
+                ''') % vs)
         buf.dedent()
+        buf.putlines(dedent('''\
+        except:
+            %(global_info)s = info
+            info.exc = sys.exc_info()
+            return -1
+        ''' % vs))
         buf.dedent()
-        buf.put('''
-        cdef void %(wrapper)(%(arg_decls)s):
-            if %(wrapper_core)(%(arg_names)s) != 0:
-                longjmp(%(global_info).jmp, 1)
-        ''' % d)
+        
+        buf.putlines(dedent('''
+        cdef void %(wrapper)s(%(arg_decls)s):
+            if %(wrapper_core)s(%(arg_names)s) != 0:
+                longjmp(%(global_info)s.jmp, 1)
+
+        
+        ''' % vs))
 
         
 
@@ -1083,6 +1133,7 @@ class CyProcedure(AstNode):
     def _update(self):
         self.arg_mgr = CyArgManager(self.in_args, self.out_args, self.call_args,
                                     self.aux_args)
+        self.callback_args = [x for x in self.in_args if isinstance(x, CyCallbackArg)]
         
     def get_names(self):
         # A template proc can provide more than one name
@@ -1111,19 +1162,48 @@ class CyProcedure(AstNode):
     def proc_declaration(self, ctx):
         return "%s:" % self.cy_prototype(ctx.cfg, in_pxd=False)
 
-    def proc_call(self, ctx):
+    def put_proc_call(self, ctx, buf):
+        callback_args = self.callback_args
+        for arg in callback_args:
+            buf.putln('%s = %s = fw_CallbackInfo(%s, %s)' % (
+                arg.callback_info_name, arg.local_info_name,
+                arg.cy_name, 'None'))
+        if len(callback_args) > 0:
+            buf.putln('try:')
+            buf.indent()
+        if len(callback_args) == 1:
+            cbinfo = self.callback_args[0].callback_info_name
+            buf.putln('if setjmp(%s.jmp) == 0:' % cbinfo)
+            buf.indent()
+        elif len(callback_args > 1):
+            raise NotImplementedError()
+            #buf.putln('cdef bint fw_exc_occurred = False')
+
         if self.return_arg is None:
             return_assign = ''
         else:
             return_assign = '%s = ' % self.return_arg.intern_name
             
-        proc_call = "%(return_assign)sfc.%(call_name)s(%(call_arg_list)s)" % dict(
+        buf.putln("%(return_assign)sfc.%(call_name)s(%(call_arg_list)s)" % dict(
             call_name=self.fc_name,
             call_arg_list=', '.join(self.arg_mgr.call_arg_list(ctx)),
-            return_assign=return_assign)
-                                        
-        return proc_call
+            return_assign=return_assign))
 
+        if len(callback_args) == 1:
+            buf.dedent()
+            buf.putlines(dedent('''\
+                else:
+                    fw_exctype, fw_excval, fw_exctb = %s.exc
+                    %s.exc = None
+                    raise fw_exctype, fw_excval, fw_exctb
+                ''' % (cbinfo, cbinfo)))
+        if len(callback_args) > 0:
+            buf.dedent()
+            buf.putlines(dedent('''\
+                finally:
+                    %s = None
+            ''' % cbinfo))
+                                        
     def temp_declarations(self, buf, ctx):
         decls_by_type = {}
         for typepart, namepart in self.arg_mgr.intern_declarations(ctx):
@@ -1206,6 +1286,12 @@ class CyProcedure(AstNode):
         buf.putln(self.proc_declaration(ctx))
         buf.indent()
         self.put_docstring(buf)
+        if len(self.callback_args) > 0:
+            buf.putln('global %s' % ', '.join(
+                x.callback_info_name for x in self.callback_args))
+            buf.putln('cdef fw_CallbackInfo %s' % ', '.join(
+                x.local_info_name for x in self.callback_args))
+                
         self.temp_declarations(buf, ctx)
 
         # TODO: Refactor args lists
@@ -1237,7 +1323,7 @@ class CyProcedure(AstNode):
         code.emit_code_snippets(snippets, buf)
         
         self.pre_call_code(ctx, buf)
-        buf.putln(self.proc_call(ctx))
+        self.put_proc_call(ctx, buf)
         self.post_try_finally(ctx, buf)
         rt = self.return_tuple(ctx)
         if rt: buf.putln(rt)
@@ -1355,7 +1441,23 @@ class CythonExpression(object):
         return "<CythonExpression %r (depends: %r)>" % (self.template, self.requires)
 
 
-as_fortran_array_utility_code = u"""
+class UtilityCode(object):
+    def __init__(self, code, leading=False):
+        self.code = code
+        self.leading = leading
+        
+    def __hash__(self):
+        return hash((self.code, self.leading))
+    
+    def __eq__(self, other):
+        return (isinstance(other, UtilityCode) and
+                self.code == other.code and
+                self.leading == other.leading)
+
+    def __ne__(self, other):
+        return not self == other
+
+as_fortran_array_utility_code = UtilityCode(u"""
 cdef np.ndarray fw_asfortranarray(object value, int typenum, int ndim,
                                   np.intp_t * shape, bint copy,
                                   bint create, int alignment=1):
@@ -1383,9 +1485,9 @@ cdef np.ndarray fw_asfortranarray(object value, int typenum, int ndim,
         for i in range(ndim):
             shape[i] = result_shape[i]
     return result
-"""
+""")
 
-as_fortran_array_f2pystyle_utility_code = u"""
+as_fortran_array_f2pystyle_utility_code = UtilityCode(u"""
 cdef np.ndarray fw_asfortranarray(object value, int typenum, int ndim,
                                   np.intp_t * coerced_shape,
                                   bint copy, bint create, int alignment=1):
@@ -1420,7 +1522,7 @@ cdef np.ndarray fw_asfortranarray(object value, int typenum, int ndim,
         # Pad shape with ones on right side if necessarry
         coerced_shape[i] = 1
     return result
-"""
+""")
 
 
 ##     if result.ndim != ndim:
@@ -1449,7 +1551,7 @@ cdef np.ndarray fw_asfortranarray(object value, int typenum, int ndim,
 #        return a, b
 #    return result, result
 
-as_char_utility_code = u"""
+as_char_utility_code = UtilityCode(u"""
 cdef char fw_aschar(object s):
     cdef char* buf
     try:
@@ -1467,9 +1569,9 @@ cdef char fw_aschar(object s):
         return 0
     else:
         return buf[0]
-"""
+""")
 
-callback_utility_code = u"""
+callback_utility_code = UtilityCode(u"""
 cdef extern from "setjmp.h":
     ctypedef struct jmp_buf:
         pass    
@@ -1488,7 +1590,12 @@ cdef class fw_CallbackInfo(object):
     cdef object arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9
     # For use by longjmp
     cdef jmp_buf jmp
-"""
+    def __cinit__(self, object callback, object extra_args):
+        self.callback = callback
+        self.extra_args = extra_args
+
+
+""", leading=True)
 
 ## explicit_shape_array_utility_code = u"""
 ## cdef object fw_explicitarray(object value, int typenum, int ndim,
