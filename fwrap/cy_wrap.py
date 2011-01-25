@@ -1203,7 +1203,7 @@ class CyProcedure(AstNode):
             cbinfo = self.callback_args[0].callback_info_name
             buf.putln('if setjmp(%s.jmp) == 0:' % cbinfo)
             buf.indent()
-        elif len(callback_args > 1):
+        elif len(callback_args) > 1:
             raise NotImplementedError()
             #buf.putln('cdef bint fw_exc_occurred = False')
 
