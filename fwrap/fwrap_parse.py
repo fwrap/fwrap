@@ -13,11 +13,6 @@ def generate_ast(fsrcs):
     for src in fsrcs:
         language = 'pyf' if src.endswith('.pyf') else 'fortran'
         block = api.parse(src, analyze=True)
-        tree = block.content
-        for proc in tree:
-            if not is_proc(proc):
-                # we ignore non-top-level procedures until modules are supported.
-                continue
         _process_node(block, ast, language)
     return ast
 
