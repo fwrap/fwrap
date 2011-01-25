@@ -1,0 +1,18 @@
+python module __user__routines 
+    interface
+        subroutine callback(n, ret)
+            integer intent(in) :: n
+            integer intent(out) :: ret
+        end subroutine callback
+    end interface
+end python module __user__routines
+
+python module pyf_callbacks
+    interface
+       subroutine foo(callback, x)
+       use __user__routines
+       external callback
+       integer :: x
+       end subroutine foo
+    end interface 
+end python module pyf_callbacks
