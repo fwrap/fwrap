@@ -11,43 +11,58 @@ from fparser import typedecl_statements
 def generate_ast(fsrcs):
     ast = []
     for src in fsrcs:
-        language = 'pyf' if src.endswith('.pyf') else 'fortran'
         block = api.parse(src, analyze=True)
-        _process_node(block, ast, language)
+        if src.endswith('.pyf'):
+            ast.extend(_process_pyf(block))
+        else:
+            ast.extend(_process_fortran(block))
     return ast
 
-def _process_node(node, ast, language):
-    # ast: Output list of function/subroutine nodes
-    if not hasattr(node, 'content'):
-        return
-    children = node.content
-    if len(children) == 0:
-        return
-    for child in children:
-        # For processing .pyf files, simply skip the initial
-        # wrapping pythonmodule and interface nodes
-        # TODO: Multiple pythonmodule in one .pyf?
-        if child.blocktype in ('pythonmodule', 'interface'):
-            _process_node(child, ast, language)
-        elif not is_proc(child):
-            # we ignore non-top-level procedures until modules are supported.
-            pass
+def _process_pyf(block):
+    callback_modules = {} # name : [proc]
+    regular_procs = []
+    for module in block.content:
+        if module.blocktype !=  'pythonmodule':
+            raise ValueError('not a pythonmodule')
+        ifacelst = module.content
+        if len(ifacelst) != 2 or ifacelst[0].blocktype != 'interface':
+            # 2: There's an EndPythonModule
+            raise ValueError('not an inface')
+        procs = ifacelst[0].content
+        if '__user__' in module.name:
+            # Callback specs
+            callback_modules[module.name] = procs
         else:
-            args = _get_args(child, language)
-            params = _get_params(child, language)
-            kw = dict(
-                name=child.name,
-                args=args,
-                params=params,
-                language=language)
-            if language == 'pyf':
-                kw.update(_get_pyf_proc_annotations(child))
-            if child.blocktype == 'subroutine':
-                ast.append(pyf.Subroutine(**kw))
-            elif child.blocktype == 'function':
-                ast.append(pyf.Function(return_arg=_get_ret_arg(child, language),
-                                        **kw))
-    return ast
+            regular_procs.extend(procs)
+    return [_process_proc(proc, 'pyf', callback_modules)
+            for proc in procs]
+
+def _process_fortran(block):
+    return [_process_proc(proc, 'fortran', None)
+            for proc in block.content]
+
+def _process_proc(proc, language, pyf_callback_modules):
+    from fparser.statements import Use
+    if not is_proc(proc):
+        raise ValueError('not a proc')
+    pyf_use = {}
+    kw = {}
+    if language == 'pyf':
+        kw.update(_get_pyf_proc_annotations(proc))
+        for statement in proc.content:
+            if isinstance(statement, Use):
+                pyf_use[statement.name] = pyf_callback_modules[statement.name]
+    args = _get_args(proc, language, pyf_use)
+    params = _get_params(proc, language)
+    kw.update(name=proc.name,
+              args=args,
+              params=params,
+              language=language)
+    if proc.blocktype == 'subroutine':
+        return pyf.Subroutine(**kw)
+    elif proc.blocktype == 'function':
+        return pyf.Function(return_arg=_get_ret_arg(proc, language),
+                            **kw)
 
 def is_proc(proc):
     return proc.blocktype in ('subroutine', 'function')
@@ -58,7 +73,7 @@ def _get_ret_arg(proc, language):
     ret_arg.intent = None
     return ret_arg
 
-def _get_param(p_param, language):
+def _get_param(p_param, language, ast):
     if not p_param.is_parameter():
         raise ValueError("argument %r is not a parameter" % p_param)
     if not p_param.init:
@@ -73,7 +88,7 @@ def _get_param(p_param, language):
                            "parameters at the moment...")
     return pyf.Parameter(name=name, dtype=dtype, expr=p_param.init)
 
-def _get_arg(p_arg, language):
+def _get_arg(p_arg, language, pyf_use):
 
     if not p_arg.is_scalar() and not p_arg.is_array():
         raise RuntimeError(
@@ -81,7 +96,10 @@ def _get_arg(p_arg, language):
                     "a scalar or an array (derived type?)" % p_arg)
 
     if p_arg.is_external():
-        return callback_arg(p_arg)
+        if language == 'pyf':
+            return pyf_callback_arg(p_arg, pyf_use)
+        else:
+            return callback_arg(p_arg)
 
     p_typedecl = p_arg.get_typedecl()
     dtype = _get_dtype(p_typedecl, language)
@@ -103,6 +121,23 @@ def _get_arg(p_arg, language):
                         intent=intent,
                         dimension=dimspec,
                         **pyf_annotations)
+
+def pyf_callback_arg(p_arg, use):
+    for procs in use.values():
+        for proc in procs:
+            if p_arg.name == proc.name:
+                break
+        else:
+            proc = None
+        if proc is not None:
+            break
+    else:
+        raise ValueError() # no proc
+
+    callback_procedure = _process_proc(proc, 'pyf', use)
+    1/0
+    
+
 
 def callback_arg(p_arg):
     parent_proc = None
@@ -177,11 +212,11 @@ def _get_callback_dtype(parent_proc, p_arg, proc_name, arg_lst):
                             arg_dims=arg_dims,
                             arg_names=arg_names)
 
-def _get_args(proc, language):
+def _get_args(proc, language, pyf_use):
     args = []
     for argname in proc.args:
         p_arg = proc.get_variable(argname)
-        args.append(_get_arg(p_arg, language))
+        args.append(_get_arg(p_arg, language, pyf_use))
     return args
 
 def _get_params(proc, language):

@@ -551,6 +551,10 @@ class Argument(AstNode):
     is_return_arg = False
     dimension = None
 
+    # When an argument is a callback argument, it has a nested
+    # Procedure node describing the signature
+    callback_procedure = None
+
     pyf_hide = False
     pyf_default_value = None
     pyf_check = []
