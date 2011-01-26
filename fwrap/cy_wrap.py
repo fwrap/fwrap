@@ -946,12 +946,13 @@ class CyCallbackArg(_CyArg):
             cdef fw_CallbackInfo info
         ''' % vs))
         buf.indent()
-        buf.putln('cdef np.ndarray %s' % ', '.join([internname
-                                                    for name, internname, dtype, dim
-                                                    in array_args]))
-        buf.putln('cdef np.npy_intp %s' % ', '.join(['%s_shape[%d]' % (name, len(dim.dims))
-                                                    for name, internname, dtype, dim
-                                                    in array_args]))
+        if len(array_args) > 0:
+            buf.putln('cdef np.ndarray %s' % ', '.join([internname
+                                                        for name, internname, dtype, dim
+                                                        in array_args]))
+            buf.putln('cdef np.npy_intp %s' % ', '.join(['%s_shape[%d]' % (name, len(dim.dims))
+                                                        for name, internname, dtype, dim
+                                                        in array_args]))
         buf.putlines(dedent('''\
             info = %(global_info)s
             try:
@@ -993,13 +994,18 @@ class CyCallbackArg(_CyArg):
                 call_args.append(intern)
                 ret_args.append(ret)
         vs.update(call_args=', '.join(call_args),
-                  ret_args=', '.join(ret_args))
+                  call_args_comma=(', '.join(call_args) + (', '
+                                                           if len(call_args) > 0
+                                                           else '')),
+                  ret_args_assign=('%s = ' % ', '.join(ret_args)
+                                   if len(ret_args) > 0
+                                   else ''))
 
         buf.putlines(dedent('''\
         if info.extra_args is None:
-            %(ret_args)s = info.callback(%(call_args)s)
+            %(ret_args_assign)sinfo.callback(%(call_args)s)
         else:
-            %(ret_args)s = info.callback(%(call_args)s, *info.extra_args)
+            %(ret_args_assign)sinfo.callback(%(call_args_comma)s*info.extra_args)
         ''') % vs)
         for extern, dtype, dim in cb_args:
             intern = '%s_' % extern

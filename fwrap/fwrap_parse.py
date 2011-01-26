@@ -189,10 +189,15 @@ def _get_callback_dtype(parent_proc, p_arg, proc_name, arg_lst):
         bounds[vname] = v.bounds
         type_ctx[vname] = v.get_typedecl()
     type_visitor = ExpressionType(type_ctx)
+
+    kw = {}
+    cb_args = []
     arg_dtypes = []
     arg_dims = []
     arg_names = []
     for arg in args:
+        if isinstance(arg.arg, fort_expr.EmptyNode):
+            continue
         arg_dt = _get_dtype(type_visitor.visit(arg), 'fortran')
         if isinstance(arg.arg, NameNode) and arg.arg.name in type_ctx:
             # If call argument is a simple name node, we record the

@@ -8,3 +8,9 @@ C configure-flags: --f77binding
       external cb
       call cb(a, b, n)
       end subroutine caller
+
+
+      subroutine callsnoargs(f)
+      external f
+      call f()
+      end subroutine

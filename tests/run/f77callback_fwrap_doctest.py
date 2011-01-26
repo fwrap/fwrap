@@ -1,6 +1,9 @@
 from f77callback_fwrap import *
 import numpy as np
 
+def printfoo():
+    print 'foo'
+
 def getarr(n):
     return np.arange(n * n, dtype=np.float64).reshape(n, n)
 
@@ -121,5 +124,8 @@ __doc__ = u"""
     Traceback (most recent call last):
         ...
     ValueError: Array returned from callback has illegal shape
+
+    >>> _ = callsnoargs(printfoo)
+    foo
     
 """
