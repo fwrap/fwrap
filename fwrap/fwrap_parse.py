@@ -29,7 +29,8 @@ def _process_pyf(block):
         if len(ifacelst) != 2 or ifacelst[0].blocktype != 'interface':
             # 2: There's an EndPythonModule
             raise ValueError('not an inface')
-        procs = ifacelst[0].content
+        procs = [proc for proc in ifacelst[0].content
+                 if proc.blocktype in ('function', 'subroutine')]
         if '__user__' in module.name:
             # Callback specs
             callback_modules[module.name] = procs
