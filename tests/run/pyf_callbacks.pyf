@@ -4,6 +4,10 @@ python module __user__routines
             integer intent(in) :: n
             integer intent(out) :: ret
         end subroutine callback
+        subroutine callback2darr(x, n, m)
+            integer, intent(hide) :: n, m
+            real*8, intent(in,out), dimension(n, m) :: x
+        end subroutine callback2darr
     end interface
 end python module __user__routines
 
@@ -13,6 +17,14 @@ python module pyf_callbacks
        use __user__routines
        external callback
        integer, intent(in,out) :: x
-       end subroutine foo
+       end subroutine
+
+       subroutine array2d(callback2darr, x, n, m)
+       use __user__routines
+       external callback2darr
+       real*8, intent(in,out), dimension(n, m) :: x
+       integer, intent(in) :: n, m
+       end subroutine
+
     end interface 
 end python module pyf_callbacks

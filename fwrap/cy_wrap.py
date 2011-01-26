@@ -983,6 +983,8 @@ class CyCallbackArg(_CyArg):
         call_args = []
         ret_args = []
         for arg in cb_args:
+            if arg.pyf_hide:
+                continue
             extern = arg.name
             dims = arg.dimension
             intern = '%s_' % extern
@@ -997,7 +999,7 @@ class CyCallbackArg(_CyArg):
                     call_args.append(intern)
                 if arg.intent in ('inout', 'out', None):
                     ret_args.append(ret)
-                    
+
         vs.update(call_args=', '.join(call_args),
                   call_args_comma=(', '.join(call_args) + (', '
                                                            if len(call_args) > 0
