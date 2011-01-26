@@ -12,7 +12,7 @@ python module pyf_callbacks
        subroutine foo(callback, x)
        use __user__routines
        external callback
-       integer :: x
+       integer, intent(in,out) :: x
        end subroutine foo
     end interface 
 end python module pyf_callbacks

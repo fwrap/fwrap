@@ -988,11 +988,16 @@ class CyCallbackArg(_CyArg):
             intern = '%s_' % extern
             ret = '%s_ret' % extern
             if dims is None:
-                call_args.append('%s[0]' % extern)
-                ret_args.append('%s[0]' % extern)
+                if arg.intent in ('inout', 'in', None):
+                    call_args.append('%s[0]' % extern)
+                if arg.intent in ('inout', 'out', None):
+                    ret_args.append('%s[0]' % extern)
             else:
-                call_args.append(intern)
-                ret_args.append(ret)
+                if arg.intent in ('inout', 'in', None):
+                    call_args.append(intern)
+                if arg.intent in ('inout', 'out', None):
+                    ret_args.append(ret)
+                    
         vs.update(call_args=', '.join(call_args),
                   call_args_comma=(', '.join(call_args) + (', '
                                                            if len(call_args) > 0

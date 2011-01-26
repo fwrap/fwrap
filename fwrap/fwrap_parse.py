@@ -136,8 +136,12 @@ def pyf_callback_arg(p_arg, use):
     else:
         raise ValueError() # no proc
 
-    callback_procedure = _process_proc(proc, 'pyf', use)
-
+    cbproc = _process_proc(proc, 'pyf', use)
+    arg = pyf.Argument(name=p_arg.name,
+                        callback_procedure=cbproc,
+                        dtype=pyf.CallbackType(),
+                        intent='in')
+    return arg
 
 def callback_arg(p_arg):
     parent_proc = None
