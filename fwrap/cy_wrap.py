@@ -224,6 +224,8 @@ For usage information see the function docstrings.
 class _CyArgBase(AstNode):
     mandatory = ('name', 'cy_name', 'intent', 'dtype', 'ktp')
 
+    callback_procedure = None
+
     # Optional:
     pyf_hide = False
     pyf_default_value = None
@@ -920,22 +922,17 @@ class CyCallbackArg(_CyArg):
     def generate_callback_wrapper(self, ctx, buf):
         ctx.use_import('import sys')
         ctx.use_utility_code(callback_utility_code)
-        arg_decls = ['%s %s' % (t.c_declaration(), name)
-                     for t, name in zip(self.dtype.arg_dtypes,
-                                        self.dtype.arg_names)]
 
-        intern_names = ['%s_' % name for name in self.dtype.arg_names]
-        cb_args = zip(self.dtype.arg_names,
-                      self.dtype.arg_dtypes,
-                      self.dtype.arg_dims)
+        cb_args = self.callback_procedure.args
+        
+        arg_decls = ['%s %s' % (arg.dtype.c_declaration(), arg.name)
+                     for arg in cb_args]
+        intern_names = ['%s_' % arg.name for arg in cb_args]
 
-        array_args = []
-        for name, dtype, dim in cb_args:
-            if dim is not None:
-                array_args.append((name, '%s_' % name, dtype, dim))
+        array_args = [arg for arg in cb_args if arg.dimension is not None]
         vs = {}
         vs.update(arg_decls=', '.join(arg_decls),
-                  arg_names=', '.join(self.dtype.arg_names),
+                  arg_names=', '.join(arg.name for arg in cb_args),
                   global_info=self.callback_info_name,
                   wrapper_core=self.callback_core_name,
                   wrapper=self.callback_wrapper_name)
@@ -947,12 +944,10 @@ class CyCallbackArg(_CyArg):
         ''' % vs))
         buf.indent()
         if len(array_args) > 0:
-            buf.putln('cdef np.ndarray %s' % ', '.join([internname
-                                                        for name, internname, dtype, dim
-                                                        in array_args]))
-            buf.putln('cdef np.npy_intp %s' % ', '.join(['%s_shape[%d]' % (name, len(dim.dims))
-                                                        for name, internname, dtype, dim
-                                                        in array_args]))
+            buf.putln('cdef np.ndarray %s' % ', '.join('%s_' % arg.name for arg in array_args))
+            buf.putln('cdef np.npy_intp %s' % ', '.join('%s_shape[%d]' %
+                                                        (arg.name, len(arg.dimension.dims))
+                                                        for arg in array_args))
         buf.putlines(dedent('''\
             info = %(global_info)s
             try:
@@ -967,9 +962,12 @@ class CyCallbackArg(_CyArg):
             return '%s[0]' % s
         
         # Allocate array wrapper objects
-        for extern, intern, dtype, dim in array_args:
+        for arg in array_args:
+            dim = arg.dimension
+            extern = arg.name
+            intern = '%s_' % arg.name
             exprs = [parse_sizeexpr(d.sizeexpr) for d in dim.dims]
-            buf.putln('; '.join('%s_shape[%d] = %s' % (name, idx, expr)
+            buf.putln('; '.join('%s_shape[%d] = %s' % (arg.name, idx, expr)
                                 for idx, expr in enumerate(exprs)))
             buf.putln('%(intern)s = np.PyArray_New(&np.PyArray_Type, %(ndim)d, '
                       '%(shape)s, %(enum)s, NULL, <char*>%(extern)s, 0, '
@@ -977,14 +975,16 @@ class CyCallbackArg(_CyArg):
                                                     extern=extern,
                                                     ndim=len(dim.dims),
                                                     shape='%s_shape' % extern,
-                                                    enum=dtype.npy_enum))
+                                                    enum=arg.dtype.npy_enum))
         # Build call arg str (dereference scalars). We treat *all*
         # arguments as inout arguments for now, and leave this to
         # manual modification -- Fortran 77 simply does not have
         # enough information
         call_args = []
         ret_args = []
-        for extern, dtype, dims in cb_args:
+        for arg in cb_args:
+            extern = arg.name
+            dims = arg.dimension
             intern = '%s_' % extern
             ret = '%s_ret' % extern
             if dims is None:
@@ -1007,7 +1007,9 @@ class CyCallbackArg(_CyArg):
         else:
             %(ret_args_assign)sinfo.callback(%(call_args_comma)s*info.extra_args)
         ''') % vs)
-        for extern, dtype, dim in cb_args:
+        for arg in cb_args:
+            dim = arg.dimension
+            extern = arg.name
             intern = '%s_' % extern
             ret = '%s_ret' % extern
             if dim is not None:
@@ -1016,7 +1018,7 @@ class CyCallbackArg(_CyArg):
                          else 'np.NPY_F_CONTIGUOUS')
                 shape_do_not_match = ' or '.join('%s_shape[%d] != np.PyArray_DIMS(%s)[%d]' %
                                                  (extern, idx, intern, idx) for idx in range(ndim))
-                npy_enum = dtype.npy_enum
+                npy_enum = arg.dtype.npy_enum
                 buf.putlines(dedent('''\
                 if %(intern)s is not %(ret)s:
                     %(intern)s = np.PyArray_FROMANY(%(ret)s, %(npy_enum)s, %(ndim)d, %(ndim)d, %(flags)s)

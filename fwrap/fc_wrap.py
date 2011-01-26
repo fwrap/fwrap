@@ -396,6 +396,7 @@ class FcArg(FcArgBase):
         self.name = arg.name
         self.ktp = arg.ktp
         self.intent = arg.intent
+        self.callback_procedure = wrapped.callback_procedure
         # TODO: Make FcArg an AstNode. For now:
         for attr in arg.attributes:
             if attr.startswith('pyf_'):

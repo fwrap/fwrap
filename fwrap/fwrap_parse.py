@@ -5,6 +5,7 @@
 
 import re
 from fwrap import pyf_iface as pyf
+from fwrap import fort_expr
 from fparser import api
 from fparser import typedecl_statements
 
@@ -135,8 +136,6 @@ def pyf_callback_arg(p_arg, use):
         raise ValueError() # no proc
 
     callback_procedure = _process_proc(proc, 'pyf', use)
-    1/0
-    
 
 
 def callback_arg(p_arg):
@@ -157,8 +156,11 @@ def callback_arg(p_arg):
             pass
         else:
             if cb_name == p_arg.name:
-                dt = _get_callback_dtype(parent_proc, p_arg, cb_name, stmt.items)
-                return pyf.Argument(name=p_arg.name, dtype=dt)
+                cbproc = _get_callback_proc(parent_proc, p_arg, cb_name, stmt.items,
+                                            is_function=False)
+                return pyf.Argument(name=p_arg.name,
+                                    callback_procedure=cbproc,
+                                    dtype=pyf.CallbackType())
 
     # Function call -- find where in procedure body func is called
     func_call_matcher = re.compile(r'\b%s\s*\(' % p_arg.name).search
@@ -170,10 +172,12 @@ def callback_arg(p_arg):
             assert len(stmt.item.strlinemap) == 1
             cb_name = p_arg.name
             arg_lst = stmt.item.strlinemap.values()[0]
-            dt = _get_callback_dtype(parent_proc, p_arg, cb_name, arg_lst)
-            return pyf.Argument(name=p_arg.name, dtype=dt)
+            cbproc = _get_callback_proc(parent_proc, p_arg, cb_name, arg_lst,
+                                        is_function=True)
+            return pyf.Argument(name=p_arg.name, dtype=pyf.CallbackType(),
+                                callback_procedure=cbproc)
 
-def _get_callback_dtype(parent_proc, p_arg, proc_name, arg_lst):
+def _get_callback_proc(parent_proc, p_arg, proc_name, arg_lst, is_function):
     from fort_expr import parse, ExpressionType, NameNode
     if isinstance(arg_lst, list):
         arg_lst = ', '.join(arg_lst)
@@ -209,14 +213,20 @@ def _get_callback_dtype(parent_proc, p_arg, proc_name, arg_lst):
         else:
             dimspec = None
             name = None
-        arg_dtypes.append(arg_dt)
-        arg_dims.append(dimspec)
-        arg_names.append(name)
-
-    return pyf.CallbackType(arg_dtypes=arg_dtypes,
-                            arg_dims=arg_dims,
-                            arg_names=arg_names)
-
+        cb_args.append(pyf.Argument(name=name, dtype=arg_dt, dimension=dimspec))
+        
+    kw.update(name=p_arg.name,
+              args=cb_args,
+              params=[],
+              language='fortran')
+    if is_function:
+        assert False, 'not implemented yet'
+        kw.update()# ret_arg
+    else:
+        cls = pyf.Subroutine
+        
+    return cls(**kw)
+        
 def _get_args(proc, language, pyf_use):
     args = []
     for argname in proc.args:

@@ -337,22 +337,12 @@ del _InternCPtrType
 class CallbackType(Dtype):
 
     # FIXME: this and Dtype.__init__(...) should be refactored
-    def __init__(self, arg_dtypes, arg_dims, arg_names):
-        self.arg_dtypes = arg_dtypes
-        self.arg_dims = arg_dims
-        self.arg_names = arg_names
+    def __init__(self):
         self.type = None
         self.lang = 'fortran'
         self.length = None
         self.kind = None
         self.fw_ktp = None
-
-    def c_declaration(self, name=''):
-        # FIXME: Does not work for function callbacks yet,
-        # have not recorded return type
-        return 'void (*%s)(%s)' % (
-            name,
-            ', '.join([t.c_declaration() for t in self.arg_dtypes]))
 
     def __repr__(self):
         return '<Dtype (callback)>'
@@ -603,10 +593,16 @@ class Argument(AstNode):
         return self._var.c_type_byval()
 
     def c_type(self, name=None):
-        return self._var.c_type(name)
+        if self.callback_procedure is not None:
+            return self._callback_c_type(name)
+        else:
+            return self._var.c_type(name)
 
     def c_declaration(self, name):
-        return self._var.c_declaration(name)
+        if self.callback_procedure is not None:
+            return self._callback_c_declaration(name)
+        else:
+            return self._var.c_declaration(name)
 
     def all_dtypes(self):
         adts = self.dtype.all_dtypes()
@@ -616,6 +612,20 @@ class Argument(AstNode):
 
     def depends(self):
         return self._var.depends()
+
+    def _callback_c_type(self, name):
+        # TODO: Function
+        return 'void (*%s)(%s)' % (
+            name,
+            ', '.join([arg.c_type(arg.name)
+                       for arg in self.callback_procedure.args]))
+
+    def _callback_c_declaration(self, name):
+        # TODO: Function
+        return 'void (*%s)(%s)' % (
+            name,
+            ', '.join([arg.c_declaration(arg.name)
+                       for arg in self.callback_procedure.args]))
 
 class HiddenArgument(Argument):
 
