@@ -125,7 +125,7 @@ __doc__ = u"""
         ...
     ValueError: Array returned from callback has illegal shape
 
-    >>> _ = callsnoargs(printfoo)
+    >>> callsnoargs(printfoo)
     foo
     
 """

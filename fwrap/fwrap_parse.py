@@ -160,7 +160,8 @@ def callback_arg(p_arg):
                                             is_function=False)
                 return pyf.Argument(name=p_arg.name,
                                     callback_procedure=cbproc,
-                                    dtype=pyf.CallbackType())
+                                    dtype=pyf.CallbackType(),
+                                    intent='in')
 
     # Function call -- find where in procedure body func is called
     func_call_matcher = re.compile(r'\b%s\s*\(' % p_arg.name).search
@@ -175,7 +176,8 @@ def callback_arg(p_arg):
             cbproc = _get_callback_proc(parent_proc, p_arg, cb_name, arg_lst,
                                         is_function=True)
             return pyf.Argument(name=p_arg.name, dtype=pyf.CallbackType(),
-                                callback_procedure=cbproc)
+                                callback_procedure=cbproc,
+                                intent='in')
 
 def _get_callback_proc(parent_proc, p_arg, proc_name, arg_lst, is_function):
     from fort_expr import parse, ExpressionType, NameNode
