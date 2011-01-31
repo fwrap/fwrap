@@ -14,3 +14,10 @@ C configure-flags: --f77binding
       external f
       call f()
       end subroutine
+
+      subroutine multi(f, g)
+      external f
+      external g
+      call f()
+      call g()
+      end subroutine

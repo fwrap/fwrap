@@ -1218,13 +1218,10 @@ class CyProcedure(AstNode):
         if len(callback_args) > 0:
             buf.putln('try:')
             buf.indent()
-        if len(callback_args) == 1:
-            cbinfo = self.callback_args[0].callback_info_name
+        for cbarg in callback_args:
+            cbinfo = cbarg.callback_info_name
             buf.putln('if setjmp(%s.jmp) == 0:' % cbinfo)
             buf.indent()
-        elif len(callback_args) > 1:
-            raise NotImplementedError()
-            #buf.putln('cdef bint fw_exc_occurred = False')
 
         if self.return_arg is None:
             return_assign = ''
@@ -1236,7 +1233,8 @@ class CyProcedure(AstNode):
             call_arg_list=', '.join(self.arg_mgr.call_arg_list(ctx)),
             return_assign=return_assign))
 
-        if len(callback_args) == 1:
+        for cbarg in callback_args[::-1]:
+            cbinfo = cbarg.callback_info_name
             buf.dedent()
             buf.putlines(dedent('''\
                 else:

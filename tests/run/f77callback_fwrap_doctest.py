@@ -4,6 +4,12 @@ import numpy as np
 def printfoo():
     print 'foo'
 
+def printbar():
+    print 'bar'
+
+def err():
+    raise Exception()
+
 def getarr(n):
     return np.arange(n * n, dtype=np.float64).reshape(n, n)
 
@@ -127,5 +133,20 @@ __doc__ = u"""
 
     >>> callsnoargs(printfoo)
     foo
+
+    >>> multi(printfoo, printbar)
+    foo
+    bar
+    >>> multi(printfoo, printfoo)
+    foo
+    foo
+    >>> multi(err, printbar)
+    Traceback (most recent call last):
+        ...
+    Exception
+    >>> multi(printbar, err)
+    Traceback (most recent call last):
+        ...
+    Exception
     
 """
