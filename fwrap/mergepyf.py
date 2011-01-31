@@ -39,6 +39,12 @@ def translate_checks(args, func_name):
             arg.update(pyf_check=[])
     return checks
 
+def translate_shape(arg, func_name):
+    if arg.is_array and arg.is_explicit_shape:
+        dimexprs = [c_to_cython_warn(dim.sizeexpr, func_name)
+                    for dim in arg.dimension]
+        arg.update(cy_explicit_shape_expressions=dimexprs)
+
 def create_from_pyf_postprocess(cython_ast):
     # Called on "fwrap create" command if source is a pyf file.  Does
     # a smaller subset of the parsing that mergepyf_ast does (in
@@ -51,6 +57,7 @@ def create_from_pyf_postprocess(cython_ast):
     for proc in cython_ast:
         for arg in proc.in_args + proc.aux_args:
             translate_default_value(arg, proc.name)
+            translate_shape(arg, proc.name)
         checks = translate_checks(proc.in_args + proc.aux_args +
                                   proc.out_args + proc.call_args,
                                   proc.name)
@@ -189,11 +196,7 @@ def mergepyf_proc(f_proc, pyf_proc):
                         raise RuntimeError('depends on multiple array')
                     arg.pyf_default_value = 'len(%s)' % dep
 
-        if arg.is_array and arg.is_explicit_shape:
-            dimexprs = [c_to_cython_warn(dim.sizeexpr, func_name)
-                        for dim in arg.dimension]
-            arg.update(cy_explicit_shape_expressions=dimexprs)
-
+        translate_shape(arg, func_name)
         if arg.is_array:
             # f2py semantics oddity: If one *explicitly* depends the array
             # on the shape scalar, disable truncation
