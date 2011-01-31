@@ -184,6 +184,8 @@ def callback_arg(p_arg):
                                 callback_procedure=cbproc,
                                 intent='in')
 
+    raise ValueError('Found no call of %s' % p_arg.name)
+
 def _get_callback_proc(parent_proc, p_arg, proc_name, arg_lst, is_function):
     from fort_expr import parse, ExpressionType, NameNode
     if isinstance(arg_lst, list):

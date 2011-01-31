@@ -650,13 +650,14 @@ class ArgManager(object):
         self._args = list(args)
         self._return_arg = return_arg
         self._params = list(params)
+        assert None not in self._args
+        assert None not in self._params        
         self._trim_params()
         self._check_namespace()
 
     def _trim_params(self):
         # remove params that aren't necessary as part of an argument
         # declaration.
-
         pnames = set([p.name for p in self._params])
         name2o = dict([(o.name, o) for o in (self._args + self._params)])
         queue = self._args[:]
