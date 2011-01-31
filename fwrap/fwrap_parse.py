@@ -63,15 +63,15 @@ def _process_proc(proc, language, pyf_callback_modules):
     if proc.blocktype == 'subroutine':
         return pyf.Subroutine(**kw)
     elif proc.blocktype == 'function':
-        return pyf.Function(return_arg=_get_ret_arg(proc, language),
+        return pyf.Function(return_arg=_get_ret_arg(proc, language, pyf_use),
                             **kw)
 
 def is_proc(proc):
     return proc.blocktype in ('subroutine', 'function')
 
-def _get_ret_arg(proc, language):
+def _get_ret_arg(proc, language, pyf_use):
     ret_var = proc.get_variable(proc.result)
-    ret_arg = _get_arg(ret_var, language)
+    ret_arg = _get_arg(ret_var, language, pyf_use)
     ret_arg.intent = None
     return ret_arg
 
