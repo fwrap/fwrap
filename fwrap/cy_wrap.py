@@ -956,6 +956,8 @@ class CyCallbackArg(_CyArg):
 
         def parse_sizeexpr(s):
             # Extremely simple for now
+            if s is None:
+                return 'TODO'
             assert s[0] == '(' and s[-1] == ')'
             s = s[1:-1]
             assert ' ' not in s

@@ -197,7 +197,16 @@ def callback_arg(p_arg):
                                 callback_procedure=cbproc,
                                 intent='in')
 
-    raise ValueError('Found no call of %s' % p_arg.name)
+    # Probably passed on to another function. Horrible fallback,
+    # but useful when later merging in pyf information.
+    cbproc = pyf.Subroutine(name=p_arg.name,
+                            args=[],
+                            params=[],
+                            language='fortran')
+
+    return pyf.Argument(name=p_arg.name, dtype=pyf.CallbackType(),
+                        callback_procedure=cbproc)
+    
 
 def _get_callback_proc(parent_proc, p_arg, proc_name, arg_lst, is_function):
     from fort_expr import parse, ExpressionType, NameNode
@@ -221,10 +230,14 @@ def _get_callback_proc(parent_proc, p_arg, proc_name, arg_lst, is_function):
     arg_dtypes = []
     arg_dims = []
     arg_names = []
-    for arg in args:
+    for idx, arg in enumerate(args):
         if isinstance(arg.arg, fort_expr.EmptyNode):
             continue
-        arg_dt = _get_dtype(type_visitor.visit(arg), 'fortran')
+        typespec = type_visitor.visit(arg)
+        if typespec is None:
+            arg_dt = pyf.default_real # Horrible fallback...
+        else:
+            arg_dt = _get_dtype(typespec, 'fortran')
         if isinstance(arg.arg, NameNode) and arg.arg.name in type_ctx:
             # If call argument is a simple name node, we record the
             # name to make manual modification of wrapper a bit easier.
@@ -234,7 +247,7 @@ def _get_callback_proc(parent_proc, p_arg, proc_name, arg_lst, is_function):
             dimspec = None if bound is None else pyf.Dimension(bound)
         else:
             dimspec = None
-            name = None
+            name = 'arg%d' % idx
         cb_args.append(pyf.Argument(name=name, dtype=arg_dt, dimension=dimspec))
         
     kw.update(name=p_arg.name,
