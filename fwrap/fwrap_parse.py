@@ -4,15 +4,28 @@
 #------------------------------------------------------------------------------
 
 import re
+import sys
+from contextlib import contextmanager
 from fwrap import pyf_iface as pyf
 from fwrap import fort_expr
 from fparser import api
 from fparser import typedecl_statements
 
+
+@contextmanager
+def max_recursion_depth(n):
+    old = sys.getrecursionlimit()
+    try:
+        sys.setrecursionlimit(n)
+        yield
+    finally:
+        sys.setrecursionlimit(old)
+
 def generate_ast(fsrcs):
     ast = []
     for src in fsrcs:
-        block = api.parse(src, analyze=True)
+        with max_recursion_depth(5000):
+            block = api.parse(src, analyze=True)
         if src.endswith('.pyf'):
             ast.extend(_process_pyf(block))
         else:
