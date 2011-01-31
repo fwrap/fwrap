@@ -75,7 +75,7 @@ def _get_ret_arg(proc, language):
     ret_arg.intent = None
     return ret_arg
 
-def _get_param(p_param, language, ast):
+def _get_param(p_param, language):
     if not p_param.is_parameter():
         raise ValueError("argument %r is not a parameter" % p_param)
     if not p_param.init:
