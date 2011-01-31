@@ -732,7 +732,7 @@ class _CyArrayArg(_CyArgBase):
             warn(
                 'Cannot automatically allocate explicit-shape intent(out) array '
                 'as expression is too complicated: %s' %
-                self.dimension.dims[expr.index(None)].sizeexpr)
+                self.dimension.dims[self._shape_expressions.index(None)].sizeexpr)
             can_allocate = False
 
         requires = set()
