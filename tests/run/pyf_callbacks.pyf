@@ -4,9 +4,10 @@ python module __user__routines
             integer intent(in) :: n
             integer intent(out) :: ret
         end subroutine callback
-        subroutine callback2darr(x, n, m)
+        subroutine callback2darr(x, n, m, inarr)
             integer, intent(hide) :: n, m
             real*8, intent(in,out), dimension(n, m) :: x
+            real*8, intent(in), dimension(n, m) :: inarr
         end subroutine callback2darr
     end interface
 end python module __user__routines

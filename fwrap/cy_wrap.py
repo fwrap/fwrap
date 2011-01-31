@@ -1015,6 +1015,8 @@ class CyCallbackArg(_CyArg):
             %(ret_args_assign)sinfo.callback(%(call_args_comma)s*info.extra_args)
         ''') % vs)
         for arg in cb_args:
+            if arg.intent == 'in':
+                continue
             dim = arg.dimension
             extern = arg.name
             intern = '%s_' % extern

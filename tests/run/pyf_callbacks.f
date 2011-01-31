@@ -10,5 +10,5 @@ C configure-flags: --f77binding
        external callback2darr
        real*8 x(n, m)
        integer n, m
-       call callback2darr(x, n, m)
+       call callback2darr(x, n, m, x)
        end subroutine
