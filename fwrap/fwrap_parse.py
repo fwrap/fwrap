@@ -38,12 +38,14 @@ def _process_pyf(block):
     for module in block.content:
         if module.blocktype !=  'pythonmodule':
             raise ValueError('not a pythonmodule')
-        ifacelst = module.content
-        if len(ifacelst) != 2 or ifacelst[0].blocktype != 'interface':
-            # 2: There's an EndPythonModule
-            raise ValueError('not an inface')
-        procs = [proc for proc in ifacelst[0].content
-                 if proc.blocktype in ('function', 'subroutine')]
+        procs = []
+        for iface in module.content:
+            if iface.blocktype != 'interface':
+                if iface.blocktype == 'pythonmodule': # end marker
+                    continue
+                raise ValueError('not an interface:' + iface.blocktype)
+            procs.extend(proc for proc in iface.content
+                         if proc.blocktype in ('function', 'subroutine'))
         if '__user__' in module.name:
             # Callback specs
             callback_modules[module.name] = procs
