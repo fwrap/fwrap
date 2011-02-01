@@ -229,6 +229,11 @@ def parse_callstatement_arg(arg_expr, f_arg, pyf_args):
         ampersand, var_name, offset = m.group(1), m.group(2), m.group(4)
         if offset is not None and ampersand is not None:
             raise CouldNotMergeError('Arithmetic on scalar pointer?')
+        if '__user__' in var_name:
+            # Callback argument
+            assert var_name.startswith('cb_')
+            assert '_in_' in var_name
+            var_name = var_name[3:var_name.index('_in_')]
         pyf_arg = [arg for arg in pyf_args if arg.name == var_name]
         if len(pyf_arg) >= 1:
             result = pyf_arg[0].copy()
