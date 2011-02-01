@@ -856,6 +856,7 @@ class CyCharArrayArg(_CyArrayArg):
         super(CyCharArrayArg, self)._update()
         self.odtype_name = "%s_odtype" % self.intern_name
         self.shape_name = "%s_shape" % self.intern_name
+        self.extern_name = self.cy_name
 
     def intern_declarations(self, ctx, extern_decl_made):
         ret = super(CyCharArrayArg, self).intern_declarations(ctx, extern_decl_made)
