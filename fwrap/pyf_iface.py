@@ -615,19 +615,27 @@ class Argument(AstNode):
 
     def _callback_c_type(self, name):
         # TODO: Function
-        s = 'void (*%s)(%s)' % (
-            name,
-            ', '.join([arg.c_type(None)
-                       for arg in self.callback_procedure.args]))
-        return s
+        cbargs = self.callback_procedure.args
+        if len(cbargs) == 0:
+            return 'void (*%s)(void)' % name
+        else:
+            s = 'void (*%s)(%s)' % (
+                name,
+                ', '.join([arg.c_type(None)
+                           for arg in cbargs]))
+            return s
 
     def _callback_c_declaration(self, name):
         # TODO: Function
-        s = 'void (*%s)(%s)' % (
-            name,
-            ', '.join([arg.c_declaration('')
-                       for arg in self.callback_procedure.args]))
-        return s
+        cbargs = self.callback_procedure.args
+        if len(cbargs) == 0:
+            return 'void (*%s)(void)' % name
+        else:
+            s = 'void (*%s)(%s)' % (
+                name,
+                ', '.join([arg.c_declaration('')
+                           for arg in cbargs]))
+            return s
 
 class HiddenArgument(Argument):
 

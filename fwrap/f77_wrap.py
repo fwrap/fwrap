@@ -96,7 +96,7 @@ def get_arg_declarations(proc):
     decls += ["size_t %s_len_" % arg.name
               for arg in proc.args
               if isinstance(arg.dtype, pyf.CharacterType)]
-    return ", ".join(decls)
+    return decls
 
 #
 # _fc.h generation
@@ -142,21 +142,22 @@ class GenerateFcHeader(Generator):
         self.putln('#endif')
 
     def procedure_declaration(self, proc):
-        argstr = get_arg_declarations(proc)
-        if len(argstr) == 0:
-            argstr = 'void'
-        if proc.pyf_wraps_c:
-            self.putln("FORTRAN_CALLSPEC %s %s(%s);" % (
-                proc.get_return_c_type(),
-                proc.name,
-                argstr))            
-        else:
-            self.putln("FORTRAN_CALLSPEC %s F_FUNC(%s,%s)(%s);" % (
-                proc.get_return_c_type(),
-                proc.name.lower(),
-                proc.name.upper(),
-                argstr))
-
+        args = get_arg_declarations(proc)
+        if len(args) == 0:
+            args = ['void']
+        name = proc.name
+        if not proc.pyf_wraps_c:
+            name = "F_FUNC(%s,%s)" % (name.lower(), name.upper())
+        self.putln("FORTRAN_CALLSPEC %s %s(" % (
+            proc.get_return_c_type(),
+            name))
+        for idx, arg in enumerate(args):
+            if idx < len(args) - 1:
+                comma = ','
+            else:
+                comma = ''
+            self.putln("    %s%s" % (arg, comma))
+        self.putln(");")
 
 
 #
@@ -188,8 +189,13 @@ class GenerateFcPxd(Generator):
         self.dedent()
 
     def procedure_declaration(self, proc):
-        argstr = get_arg_declarations(proc)
-        self.putln("%s %s(%s)" % (
-            proc.get_return_c_type(),
-            proc.name,
-            argstr))
+        args = get_arg_declarations(proc)
+        self.putln("%s %s(" % (proc.get_return_c_type(), proc.name))
+        for idx, arg in enumerate(args):
+            arg = arg.replace('(void)', '()')
+            if idx < len(args) - 1:
+                comma = ','
+            else:
+                comma = ''
+            self.putln("    %s%s" % (arg, comma))
+        self.putln(")")
