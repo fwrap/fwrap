@@ -24,9 +24,14 @@ def callback(a, b, n):
     print b
     print type(n)
     print n
+    b[...] = 1
     rb = b.copy()
     rb[...] = 2
     return 10, rb, n
+
+def callback_samearray(a, b, n):
+    b[...] = 2
+    return 10, b, n
 
 class Nested(object):
     def __init__(self, action=lambda: None):
@@ -90,8 +95,8 @@ def wrongshape(a, b, n):
 __doc__ = u"""
     >>> n = 3
     >>> a = 10
-    >>> b = np.arange(3*3, dtype=np.float64).reshape((n,n))
-    >>> _ = caller(callback, a, b, n)
+    >>> b = np.arange(3*3, dtype=np.float64).reshape((n,n)).copy('F')
+    >>> a_, b_, n_ = caller(callback, a, b, n)
     <type 'int'>
     10
     <type 'numpy.ndarray'>
@@ -100,6 +105,27 @@ __doc__ = u"""
      [ 6.  7.  8.]]
     <type 'int'>
     3
+    >>> b
+    array([[ 2.,  2.,  2.],
+           [ 2.,  2.,  2.],
+           [ 2.,  2.,  2.]])
+    >>> b_
+    array([[ 2.,  2.,  2.],
+           [ 2.,  2.,  2.],
+           [ 2.,  2.,  2.]])
+
+    >>> b = np.arange(3*3, dtype=np.float64).reshape((n,n)).copy('F')
+    >>> a_, b_, n_ = caller(callback_samearray, 10, b, 3)
+    >>> b
+    array([[ 2.,  2.,  2.],
+           [ 2.,  2.,  2.],
+           [ 2.,  2.,  2.]])
+    >>> b_
+    array([[ 2.,  2.,  2.],
+           [ 2.,  2.,  2.],
+           [ 2.,  2.,  2.]])
+
+
 
     >>> m = Nested(); m.run(); m
     <1 <2 (3) (3) 2> <2 (3) (3) 2> 1>
