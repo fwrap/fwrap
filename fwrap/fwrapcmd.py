@@ -172,6 +172,10 @@ def mergepyf_cmd(opts):
     if not git.clean_index_and_workdir():
         raise RuntimeError('VCS state not clean, aborting')
 
+    if (cfg.get_pyx_filename().endswith('.pyx') and
+        os.path.exists(cfg.get_pyx_filename() + '.in')):
+        raise RuntimeError('Do not invoke on generated source; see .pyx.in')
+
     # pyf-merging is based on primarily wrapping the Fortran files,
     # but incorporate any changes in pyf files (see mergepyf.py).
     
