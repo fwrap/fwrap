@@ -133,12 +133,6 @@ class GenerateFcHeader(Generator):
         self.putln('} /* extern "C" */')
         self.putln('#endif')
         self.putln('')
-        self.putln('#if !defined(NO_FORTRAN_MANGLING)')
-        for proc in self.procs:
-            self.putln('#define %s F_FUNC(%s,%s)' % (proc.name.lower(),
-                                                     proc.name.lower(),
-                                                     proc.name.upper()))
-        self.putln('#endif')
 
     def procedure_declaration(self, proc):
         args = get_arg_declarations(proc)
@@ -146,7 +140,7 @@ class GenerateFcHeader(Generator):
             args = ['void']
         name = proc.name
         if not proc.pyf_wraps_c:
-            name = "F_FUNC(%s,%s)" % (name.lower(), name.upper())
+            name = "F_FUNC_MANGLING(%s,%s)" % (name.lower(), name.upper())
         self.putln("FORTRAN_CALLSPEC %s %s(" % (
             proc.get_return_c_type(),
             name))
@@ -189,7 +183,10 @@ class GenerateFcPxd(Generator):
 
     def procedure_declaration(self, proc):
         args = get_arg_declarations(proc)
-        self.putln("%s %s(" % (proc.get_return_c_type(), proc.name))
+        self.putln('%s %s "F_FUNC(%s,%s)"(' % (proc.get_return_c_type(),
+                                               proc.name,
+                                               proc.name.lower(),
+                                               proc.name.upper()))
         for idx, arg in enumerate(args):
             arg = arg.replace('(void)', '()')
             if idx < len(args) - 1:
@@ -206,36 +203,43 @@ name_mangling_utility_code = """\
     #endif
 #endif
 #if defined(NO_FORTRAN_MANGLING)
-    #define F_FUNC(f,F) f
+    #define F_FUNC_MANGLING(f,F) f
 #else
     #if defined(PREPEND_FORTRAN)
         #if defined(NO_APPEND_FORTRAN)
             #if defined(UPPERCASE_FORTRAN)
-                #define F_FUNC(f,F) _##F
+                #define F_FUNC_MANGLING(f,F) _##F
             #else
-                #define F_FUNC(f,F) _##f
+                #define F_FUNC_MANGLING(f,F) _##f
             #endif
         #else
             #if defined(UPPERCASE_FORTRAN)
-                #define F_FUNC(f,F) _##F##_
+                #define F_FUNC_MANGLING(f,F) _##F##_
             #else
-                #define F_FUNC(f,F) _##f##_
+                #define F_FUNC_MANGLING(f,F) _##f##_
             #endif
         #endif
     #else
         #if defined(NO_APPEND_FORTRAN)
             #if defined(UPPERCASE_FORTRAN)
-                #define F_FUNC(f,F) F
+                #define F_FUNC_MANGLING(f,F) F
             #else
                 #error Can not happen
             #endif
         #else
             #if defined(UPPERCASE_FORTRAN)
-                #define F_FUNC(f,F) F##_
+                #define F_FUNC_MANGLING(f,F) F##_
             #else
-                #define F_FUNC(f,F) f##_
+                #define F_FUNC_MANGLING(f,F) f##_
             #endif
         #endif
     #endif
 #endif
+
+#if defined(__cplusplus)
+#define F_FUNC(f,F) ::F_FUNC_MANGLING(f,F)
+#else
+#define F_FUNC(f,F) F_FUNC_MANGLING(f,F)
+#endif
+
 """
