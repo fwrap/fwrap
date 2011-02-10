@@ -14,7 +14,6 @@
 
 from fwrap import pyf_iface as pyf
 from fwrap import constants
-from fwrap import f77_config
 from fwrap.pyf_iface import _py_kw_mangler
 
 class Generator(object):
@@ -123,7 +122,7 @@ class GenerateFcHeader(Generator):
         self.putln('#define FORTRAN_CALLSPEC')
         self.putln('#endif')
         self.putln('')
-        self.write(f77_config.name_mangling_utility_code)
+        self.write(name_mangling_utility_code)
         self.putln('')
         self.putln('#if defined(__cplusplus)')
         self.putln('extern "C" {')    
@@ -199,3 +198,44 @@ class GenerateFcPxd(Generator):
                 comma = ''
             self.putln("    %s%s" % (arg, comma))
         self.putln(")")
+
+name_mangling_utility_code = """\
+#if !defined(NO_FORTRAN_MANGLING)
+    #if !defined(PREPEND_FORTRAN) && defined(NO_APPEND_FORTRAN) && !defined(UPPERCASE_FORTRAN)
+        #define NO_FORTRAN_MANGLING 1
+    #endif
+#endif
+#if defined(NO_FORTRAN_MANGLING)
+    #define F_FUNC(f,F) f
+#else
+    #if defined(PREPEND_FORTRAN)
+        #if defined(NO_APPEND_FORTRAN)
+            #if defined(UPPERCASE_FORTRAN)
+                #define F_FUNC(f,F) _##F
+            #else
+                #define F_FUNC(f,F) _##f
+            #endif
+        #else
+            #if defined(UPPERCASE_FORTRAN)
+                #define F_FUNC(f,F) _##F##_
+            #else
+                #define F_FUNC(f,F) _##f##_
+            #endif
+        #endif
+    #else
+        #if defined(NO_APPEND_FORTRAN)
+            #if defined(UPPERCASE_FORTRAN)
+                #define F_FUNC(f,F) F
+            #else
+                #error Can not happen
+            #endif
+        #else
+            #if defined(UPPERCASE_FORTRAN)
+                #define F_FUNC(f,F) F##_
+            #else
+                #define F_FUNC(f,F) f##_
+            #endif
+        #endif
+    #endif
+#endif
+"""
