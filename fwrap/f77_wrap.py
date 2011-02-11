@@ -85,10 +85,11 @@ def iface_proc_to_cy_proc(proc):
 # Common utils
 #
 def get_arg_decl(arg):
+    name = _py_kw_mangler(arg.name)
     if arg.pyf_by_value and arg.dimension is None:
-        return arg.c_type_byval(arg.name)
+        return arg.c_type_byval(name)
     else:
-        return arg.c_type(arg.name)
+        return arg.c_type(name)
 
 def get_arg_declarations(proc):
     decls = [get_arg_decl(arg) for arg in proc.args]
