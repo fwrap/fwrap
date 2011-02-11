@@ -157,8 +157,6 @@ def update_cmd(opts):
 
 def mergepyf_cmd(opts):
     use_git = check_ok_to_write(opts)
-    if use_git and not git.is_tracked(opts.wrapper_pyx):
-        raise RuntimeError('Not tracked by VCS: %s' % opts.wrapper_pyx)
     for f in [opts.wrapper_pyx, opts.pyf]:
         if not os.path.exists(f):
             raise ValueError('No such file: %s' % f)
@@ -167,14 +165,21 @@ def mergepyf_cmd(opts):
     cfg = orig_cfg.copy()
     cfg.update_version()
 
-    if not git.is_tracked(cfg.get_pyx_filename()):
-        raise RuntimeError('Not tracked by VCS, aborting: %s' % cfg.get_pyx_basename())
-    if not git.clean_index_and_workdir():
-        raise RuntimeError('VCS state not clean, aborting')
-
     if (cfg.get_pyx_filename().endswith('.pyx') and
         os.path.exists(cfg.get_pyx_filename() + '.in')):
         raise RuntimeError('Do not invoke on generated source; see .pyx.in')
+
+    do_merge = False
+    target_file = os.path.join('.fwrap+pyf', cfg.get_pyx_basename())
+    if os.path.exists(target_file):
+        print 'Found previously generated file at %s' % target_file
+        print 'Will use as merge parent'
+        do_merge = True
+        files = [cfg.get_pyx_basename()] + list(cfg.get_auxiliary_files())
+        for f in files:
+            os.rename('.fwrap+pyf/%s' % f, '.fwrap+pyf/%s.orig' % f)
+    else:
+        os.makedirs('.fwrap+pyf')
 
     # pyf-merging is based on primarily wrapping the Fortran files,
     # but incorporate any changes in pyf files (see mergepyf.py).
@@ -211,64 +216,25 @@ def mergepyf_cmd(opts):
     # Do the merge of Cython ast
     merged_cython_ast = mergepyf.mergepyf_ast(cython_ast, pyf_cython_ast)
 
-    # Preparations done, time to make git branches and generate wrappers
+    orig_dir = os.getcwd()
     try:
-        pyf_rev = get_last_update_rev(cfg, 'pyf')
-    except RuntimeError, e:
-        print e
-        pyf_rev = None
+        os.chdir('.fwrap+pyf')
+        fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
+                          c_ast=None, cython_ast=merged_cython_ast,
+                          update_self_sha=False,
+                          update_pyf_sha=True)
+    finally:
+        os.chdir(orig_dir)
 
-    if pyf_rev is None:
-        # First mergepyf done on this file; create branch from original
-        # wrapper generated from Fortran
-        git.delete_branch(BRANCH)
-        checkout_or_create_fwrap_branch(cfg)
-    
-        # If we are removing any routines, generate a seperate changeset for that,
-        # based on Fortran sources (with changed configuration/exclusion) only.
-        # This provides a better commit for later merges.
-        if len(excluded_by_pyf) > 0:
-            fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
-                              c_ast=None, cython_ast=cython_ast,
-                              update_self_sha=True)
-            commit_wrapper(cfg,
-                           message='(do not squash) Removed routines not present in %s' % opts.pyf)
+    files = [cfg.get_pyx_basename()] + list(cfg.get_auxiliary_files())
+    for f in files:
+        if do_merge:
+            print 'Merging ' + f
+            os.system('merge %s %s %s' % (f, '.fwrap+pyf/%s.orig' % f, '.fwrap+pyf/%s' % f))
+        else:
+            print 'Copying %s' % f
+            shutil.copyfile('.fwrap+pyf/%s' % f, f)
 
-        # Then, branch again from _fwrap to _fwrap+pyf. We do NOT
-        # update the self-sha1 on this branch, so that the changes
-        # are considered manual when doing a "fwrap update"
-        pyf_rev = 'HEAD'
-        
-    git.delete_branch(PYF_BRANCH)
-    git.branch(PYF_BRANCH, pyf_rev)
-    git.checkout(PYF_BRANCH)
-
-    # Now, we generate the wrapper using the merged cython AST
-    # (This regenerates the _fc-files if the if-test above hits;
-    # TODO: break this up some, but overhead is negligible)
-    fwrapper.generate(f_ast, cfg.wrapper_name, cfg,
-                      c_ast=None, cython_ast=merged_cython_ast,
-                      update_self_sha=False,
-                      update_pyf_sha=True)
-    message = opts.message
-    if message is None:
-        message = 'Ported changes of %s' % opts.pyf
-    commit_wrapper(cfg, message)
-
-    git.checkout(start_branch)
-
-    print dedent('''
-    The updated wrapper can be found in the "%(PYF_BRANCH)s" branch,
-    please merge it manually and remove it with:
-
-        git merge %(PYF_BRANCH)s
-        git branch -d %(PYF_BRANCH)s
-
-    Later "fwrap update" commands will be based off "%(BRANCH)s",
-    which can either be left around, or removed, at your option.  If
-    removed, it will be recreated the next time you do "fwrap update",
-    without the changes of the pyf file.
-    ''' % dict(PYF_BRANCH=PYF_BRANCH, BRANCH=BRANCH))
     
     return 0
 
