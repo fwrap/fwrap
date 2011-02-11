@@ -81,20 +81,22 @@ def add_cmdline_options(add_option):
                help='go to greater lengths to behave like f2py')
     add_option('--no-cpdef', action='store_true',
                help='use def instead of cpdef')
-    add_option('--dummy', action='store_true',
-               help='dummy development configuration option')
+    # TODO: Make it possible to turn *off* options
     
 
 def _document_from_cmdline_options(options):
     return {
-        'f77binding' : options.f77binding,
-        'detect-templates' : options.detect_templates,
+        'f77binding' : bool(options.f77binding),
+        'detect-templates' : bool(options.detect_templates),
         'template' : [(x, {}) for x in options.template],
         'template-pattern' : [(x, {}) for x in options.template_pattern],
-        'emulate-f2py' : options.emulate_f2py,
-        'no-cpdef' : options.no_cpdef
+        'emulate-f2py' : bool(options.emulate_f2py),
+        'no-cpdef' : bool(options.no_cpdef)
          }
 
+def update_configuration_from_cmdline(cfg, options):
+    if options.no_cpdef:
+        cfg.document['no-cpdef'] = True
 #
 # Main Configuration class, backed by serializable document structure
 #

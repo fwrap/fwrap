@@ -156,14 +156,13 @@ def update_cmd(opts):
     ''' % dict(BRANCH=BRANCH))
 
 def mergepyf_cmd(opts):
-    use_git = check_ok_to_write(opts)
     for f in [opts.wrapper_pyx, opts.pyf]:
         if not os.path.exists(f):
             raise ValueError('No such file: %s' % f)
     orig_cfg = Configuration.create_from_file(opts.wrapper_pyx)
-    start_branch = git.current_branch()
     cfg = orig_cfg.copy()
     cfg.update_version()
+    configuration.update_configuration_from_cmdline(cfg, opts)
 
     if (cfg.get_pyx_filename().endswith('.pyx') and
         os.path.exists(cfg.get_pyx_filename() + '.in')):
@@ -397,6 +396,7 @@ def create_argument_parser():
     mergepyf.add_argument('-m', '--message',
                           help=('commit log message'))
     mergepyf.add_argument('pyf')
+    configuration.add_cmdline_options(mergepyf.add_argument)
 
     #
     # status command
