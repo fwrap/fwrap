@@ -125,9 +125,11 @@ def generate(fort_ast, name, cfg, output_directory=None,
 
     # Generate files and write them out
     generators = [ 
-                   (generate_cy_pxd,(cython_ast, name, cfg), CY_PXD_TMPL % name),
                    (generate_cy_pyx,(cython_ast, name, cfg, update_self_sha, update_pyf_sha),
                     (CY_PYX_IN_TMPL if cfg.detect_templates else CY_PYX_TMPL) % name) ]
+    if not cfg.no_cpdef:
+        generators.append((generate_cy_pxd,(cython_ast, name, cfg), CY_PXD_TMPL % name))
+        
     if not cfg.f77binding:
         generators.append((generate_fc_f, (c_ast, name, cfg),
                            (FC_F_TMPL_F77 if cfg.f77binding else FC_F_TMPL) % name ))
@@ -184,7 +186,8 @@ def generate_cy_pxd(cy_ast, name, cfg):
 
 def generate_cy_pyx(cy_ast, name, cfg, update_self_sha, update_pyf_sha):
     buf = CodeBuffer()
-    cy_wrap.generate_cy_pyx(cy_ast, name, buf, cfg)
+    fc_pxd_name = (constants.FC_PXD_TMPL % name).split('.')[0]
+    cy_wrap.generate_cy_pyx(cy_ast, name, fc_pxd_name, buf, cfg)
     # Add sha1 to file
     s = buf.getvalue()
     if update_self_sha or update_pyf_sha:

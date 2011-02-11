@@ -120,11 +120,15 @@ def get_out_args(args):
 def get_aux_args(args):
     return [arg for arg in args if arg.pyf_hide]
 
-def generate_cy_pxd(ast, fc_pxd_name, buf, cfg):
+def generate_preamble_imports(fc_pxd_name, buf):
     buf.putln('cimport numpy as np')
     buf.putln("from %s cimport *" %
                 constants.KTP_PXD_HEADER_SRC.split('.')[0])
     buf.putln("cimport %s as fc" % fc_pxd_name)
+
+def generate_cy_pxd(ast, fc_pxd_name, buf, cfg):
+    assert not cfg.no_cpdef
+    generate_preamble_imports(fc_pxd_name, buf)
     buf.putln('')
     for proc in ast:
         buf.putln(proc.cy_prototype(cfg))
@@ -137,7 +141,7 @@ def gen_cdef_extern_decls(buf):
     for dtype in pyf_iface.intrinsic_types:
         buf.putlines(dtype.cdef_extern_decls)
 
-def generate_cy_pyx(ast, name, buf, cfg):
+def generate_cy_pyx(ast, name, fc_pxd_name, buf, cfg):
     from fwrap.deduplicator import cy_deduplify
     header_buf = CodeBuffer()
     procs_buf = CodeBuffer()
@@ -147,8 +151,12 @@ def generate_cy_pyx(ast, name, buf, cfg):
     if cfg.detect_templates:
         ast = cy_deduplify(ast, cfg)    
     header_buf.putln("#cython: ccomplex=True")
-    header_buf.putln(' ')
+    header_buf.putln('')
     put_cymod_docstring(ast, name, header_buf, cfg)
+    header_buf.putln('')
+    if cfg.no_cpdef:
+        generate_preamble_imports(fc_pxd_name, header_buf)
+    header_buf.putln('')        
     header_buf.putln("np.import_array()")
     if not cfg.f77binding:
         header_buf.putln("include 'fwrap_ktp.pxi'")
@@ -1191,8 +1199,14 @@ class CyProcedure(AstNode):
         return self.all_dtypes_list # TODO: Generate this instead
 
     def cy_prototype(self, cfg, in_pxd=True):
-        api = '' if cfg.f77binding else 'api '
-        template = "cpdef %sobject %%(proc_name)s(%%(arg_list)s)" % api
+        if cfg.no_cpdef:
+            assert not in_pxd
+            def_ = "def"
+        elif cfg.f77binding:
+            def_ = "cpdef object"
+        else:
+            def_ = "cpdef api object"
+        template = "%s %%(proc_name)s(%%(arg_list)s)" % def_
         # Need to use default values only for trailing arguments
         # Currently, no reordering is done, one simply allows
         # trailing arguments that have defaults (explicit-shape,

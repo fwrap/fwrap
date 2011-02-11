@@ -14,6 +14,7 @@ def options(opt):
     opt.add_option('--detect-templates', action='store_true', default=False)
     opt.add_option('--template', action='append')
     opt.add_option('--emulate-f2py', action='store_true')
+    opt.add_option('--no-cpdef', action='store_true')
     opt.load('compiler_c')
     opt.load('compiler_fc')
     opt.load('python')
@@ -47,6 +48,7 @@ def configure(conf):
     conf.env['FW_DETECT_TEMPLATES'] = conf.options.detect_templates
     conf.env['FW_TEMPLATE'] = conf.options.template
     conf.env['FW_EMULATE_F2PY'] = conf.options.emulate_f2py
+    conf.env['FW_NO_CPDEF'] = conf.options.no_cpdef
     conf.env['FWRAPPER_OPTS'] = ''
     conf.env['FW_PYF'] = conf.options.pyf
 
@@ -78,6 +80,8 @@ def build(bld):
         flags.append('--detect-templates')
     if bld.env['FW_EMULATE_F2PY']:
         flags.append('--emulate-f2py')
+    if bld.env['FW_NO_CPDEF']:
+        flags.append('--no-cpdef')
     flags.extend('--template=%s' % x for x in bld.env['FW_TEMPLATE'])
     if bld.env['FW_PYF']:
         flags.append('--pyf=%s' % bld.env['FW_PYF'])

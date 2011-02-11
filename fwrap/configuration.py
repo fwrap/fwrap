@@ -54,6 +54,7 @@ configuration_dom = {
     'f77binding' : (ATTR, parse_bool, False, {}),
     'emulate-f2py' : (ATTR, parse_bool, False, {}),
     'detect-templates' : (ATTR, parse_bool, False, {}),
+    'no-cpdef' : (ATTR, parse_bool, False, {}),
     'auxiliary' : (LIST_ITEM, r'^.+$', None, {}),
     }
 
@@ -78,6 +79,8 @@ def add_cmdline_options(add_option):
                help='procs whose name match pattern make up a template')
     add_option('--emulate-f2py', action='store_true',
                help='go to greater lengths to behave like f2py')
+    add_option('--no-cpdef', action='store_true',
+               help='use def instead of cpdef')
     add_option('--dummy', action='store_true',
                help='dummy development configuration option')
     
@@ -88,7 +91,8 @@ def _document_from_cmdline_options(options):
         'detect-templates' : options.detect_templates,
         'template' : [(x, {}) for x in options.template],
         'template-pattern' : [(x, {}) for x in options.template_pattern],
-        'emulate-f2py' : options.emulate_f2py
+        'emulate-f2py' : options.emulate_f2py,
+        'no-cpdef' : options.no_cpdef
          }
 
 #
@@ -99,7 +103,8 @@ class Configuration:
     # In preferred order when serializing:
     keys = ['version', 'self-sha1', 'pyf-sha1', 'wraps', 'exclude',
             'f77binding', 'detect-templates',
-            'template', 'template-pattern', 'emulate-f2py', 'auxiliary']
+            'template', 'template-pattern', 'emulate-f2py',
+            'no-cpdef', 'auxiliary']
 
     @staticmethod
     def create_from_file(filename):
