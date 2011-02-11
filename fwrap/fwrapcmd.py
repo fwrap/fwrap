@@ -174,8 +174,8 @@ def mergepyf_cmd(opts):
         print 'Found previously generated file at %s' % target_file
         print 'Will use as merge parent'
         do_merge = True
-        files = [cfg.get_pyx_basename()] + list(cfg.get_auxiliary_files())
-        for f in files:
+        orig_files = [cfg.get_pyx_basename()] + list(cfg.get_auxiliary_files())
+        for f in orig_files:
             os.rename('.fwrap+pyf/%s' % f, '.fwrap+pyf/%s.orig' % f)
     else:
         os.makedirs('.fwrap+pyf')
@@ -227,7 +227,7 @@ def mergepyf_cmd(opts):
 
     files = [cfg.get_pyx_basename()] + list(cfg.get_auxiliary_files())
     for f in files:
-        if do_merge:
+        if do_merge and f in orig_files:
             print 'Merging ' + f
             triplet = (f, '.fwrap+pyf/%s.orig' % f, '.fwrap+pyf/%s' % f)
             from fwrap.premerge import premerge
@@ -236,7 +236,10 @@ def mergepyf_cmd(opts):
         else:
             print 'Copying %s' % f
             shutil.copyfile('.fwrap+pyf/%s' % f, f)
-
+    for f in orig_files:
+        if f not in files:
+            print 'Deleting %s' % f
+            os.unlink(f)
     
     return 0
 
