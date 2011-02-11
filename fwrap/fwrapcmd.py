@@ -229,7 +229,10 @@ def mergepyf_cmd(opts):
     for f in files:
         if do_merge:
             print 'Merging ' + f
-            os.system('merge %s %s %s' % (f, '.fwrap+pyf/%s.orig' % f, '.fwrap+pyf/%s' % f))
+            triplet = (f, '.fwrap+pyf/%s.orig' % f, '.fwrap+pyf/%s' % f)
+            from fwrap.premerge import premerge
+            premerge(*triplet)
+            os.system('merge %s %s %s' % triplet)
         else:
             print 'Copying %s' % f
             shutil.copyfile('.fwrap+pyf/%s' % f, f)
