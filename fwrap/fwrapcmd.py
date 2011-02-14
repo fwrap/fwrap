@@ -225,7 +225,12 @@ def mergepyf_cmd(opts):
     finally:
         os.chdir(orig_dir)
 
-    files = [cfg.get_pyx_basename()] + list(cfg.get_auxiliary_files())
+    pyx_file = cfg.get_pyx_basename()
+    files = [pyx_file] + list(cfg.get_auxiliary_files())
+    if do_merge:
+        # Preserve user-edited version before merge
+        shutil.copyfile(pyx_file, os.path.join('.fwrap+pyf', pyx_file) + '.ours')
+        
     for f in files:
         if do_merge and f in orig_files:
             print 'Merging ' + f
@@ -242,6 +247,19 @@ def mergepyf_cmd(opts):
             os.unlink(f)
     
     return 0
+
+def mergetool_cmd(opts):
+    orig, ours, generated = [os.path.join('.fwrap+pyf', opts.wrapper_pyx) + post
+                             for post in ('.orig', '.ours', '')]
+    os.system('kdiff3 --auto -m -o %s %s %s %s' %
+              (opts.wrapper_pyx, orig, ours, generated))
+
+def mergedone_cmd(opts):
+    from glob import glob
+    for ext in ['.orig', '.ours']:
+        for f in glob(os.path.join('.fwrap+pyf', '*%s' % ext)):
+            print 'Removing %s' % f
+            os.unlink(f)
 
 typemap_in = 'fwrap_type_specs.in'
 typemap_f90 = 'fwrap_ktp_mod.f90'
@@ -403,6 +421,20 @@ def create_argument_parser():
                           help=('commit log message'))
     mergepyf.add_argument('pyf')
     configuration.add_cmdline_options(mergepyf.add_argument)
+
+    #
+    # mergetool command
+    #
+    mergetool = subparsers.add_parser('mergetool')
+    mergetool.set_defaults(func=mergetool_cmd)
+    mergetool.add_argument('wrapper_pyx')
+
+
+    #
+    # mergedone command
+    #
+    mergedone = subparsers.add_parser('mergedone')
+    mergedone.set_defaults(func=mergedone_cmd)    
 
     #
     # status command
