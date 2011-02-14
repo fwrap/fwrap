@@ -228,13 +228,11 @@ def mergepyf_cmd(opts):
 
     pyx_file = cfg.get_pyx_basename()
     files = [pyx_file] + list(cfg.get_auxiliary_files())
-    if do_merge:
-        # Preserve user-edited version before merge
-        shutil.copyfile(pyx_file, os.path.join('.fwrap+pyf', pyx_file) + '.ours')
-        
     for f in files:
         if do_merge and f in orig_files:
             print 'Merging ' + f
+            # Preserve user-edited version before merge
+            shutil.copyfile(f, os.path.join('.fwrap+pyf', f) + '.ours')
             triplet = (f, '.fwrap+pyf/%s.orig' % f, '.fwrap+pyf/%s' % f)
             from fwrap.premerge import premerge
             premerge(*triplet)
@@ -250,10 +248,10 @@ def mergepyf_cmd(opts):
     return 0
 
 def mergetool_cmd(opts):
-    orig, ours, generated = [os.path.join('.fwrap+pyf', opts.wrapper_pyx) + post
+    orig, ours, generated = [os.path.join('.fwrap+pyf', opts.filename) + post
                              for post in ('.orig', '.ours', '')]
     os.system('kdiff3 --auto -m -o %s %s %s %s' %
-              (opts.wrapper_pyx, orig, ours, generated))
+              (opts.filename, orig, ours, generated))
 
 def mergedone_cmd(opts):
     from glob import glob
@@ -428,7 +426,7 @@ def create_argument_parser():
     #
     mergetool = subparsers.add_parser('mergetool')
     mergetool.set_defaults(func=mergetool_cmd)
-    mergetool.add_argument('wrapper_pyx')
+    mergetool.add_argument('filename')
 
 
     #
