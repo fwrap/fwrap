@@ -178,7 +178,8 @@ def mergepyf_cmd(opts):
         for f in orig_files:
             os.rename('.fwrap+pyf/%s' % f, '.fwrap+pyf/%s.orig' % f)
     else:
-        os.makedirs('.fwrap+pyf')
+        if not os.path.exists('.fwrap+pyf'):
+            os.mkdir('.fwrap+pyf')
 
     # pyf-merging is based on primarily wrapping the Fortran files,
     # but incorporate any changes in pyf files (see mergepyf.py).
