@@ -21,11 +21,11 @@ def max_recursion_depth(n):
     finally:
         sys.setrecursionlimit(old)
 
-def generate_ast(fsrcs):
+def generate_ast(fsrcs, include_dirs=None):
     ast = []
     for src in fsrcs:
         with max_recursion_depth(5000):
-            block = api.parse(src, analyze=True)
+            block = api.parse(src, analyze=True, include_dirs=include_dirs)
         if src.endswith('.pyf'):
             ast.extend(_process_pyf(block))
         else:

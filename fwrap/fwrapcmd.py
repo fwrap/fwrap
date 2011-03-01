@@ -21,6 +21,7 @@ from fwrap import configuration
 from fwrap import git
 from fwrap import fc_wrap, cy_wrap, mergepyf
 from fwrap.configuration import Configuration
+from fwrap.git import execproc
 
 BRANCH_PREFIX = '_fwrap'
 BRANCH = '_fwrap'
@@ -92,24 +93,35 @@ def parse_fortran_files(opts, cfg):
     return f_ast
 
 def create_cmd(opts):
-    use_git = check_ok_to_write(opts)
     check_in_directory_of(opts.wrapper_pyx)    
     cfg = Configuration(opts.wrapper_pyx, cmdline_options=opts)
     cfg.update_version()
     # Add wrapped files to configurtion
     for filename in opts.fortranfiles:
         cfg.add_wrapped_file(filename)
-    # Create wrapper
-    fwrapper.wrap(cfg.get_source_files(), cfg.wrapper_name, cfg,
-                  pyf_to_merge=opts.pyf)
-    # Commit
-    if use_git:
-        message = opts.message
-        if message is None:
-            message = '(do not squash) Created wrapper %s' % opts.wrapper_pyx
-        message = ('%s\n\nFiles wrapped:\n%s' %
-                   (message, '\n'.join(opts.fortranfiles)))
-        commit_wrapper(cfg, message)
+    # Preprocess any .F90 files
+    temporaries = []
+
+    def preprocess(filename):
+        if not filename.endswith('.F90'):
+            return filename
+        path = os.path.split(os.path.realpath(filename))[0]
+        fd, tmp = tempfile.mkstemp('.f90', prefix='fwrap-', dir=path)
+        temporaries.append(tmp)
+        os.close(fd)
+        execproc(['gcc', '-E', '-P', '-o', tmp, x])
+        return tmp
+
+    include_dirs = set()
+    try:
+        fortran_files = [preprocess(x) for x in opts.fortranfiles]
+        # Create wrapper
+        fwrapper.wrap(fortran_files, cfg.wrapper_name, cfg,
+                      pyf_to_merge=opts.pyf)
+    finally:
+        for t in temporaries:
+            if os.path.exists(t):
+                os.unlink(t)
     return 0
 
 def update_cmd(opts):

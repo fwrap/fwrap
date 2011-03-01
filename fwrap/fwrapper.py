@@ -21,7 +21,8 @@ from fwrap.constants import (TYPE_SPECS_SRC, CY_PXD_TMPL, CY_PYX_TMPL,
 
 PROJNAME = 'fwproj'
 
-def wrap(sources, name, cfg, output_directory=None, pyf_to_merge=None):
+def wrap(sources, name, cfg, output_directory=None, pyf_to_merge=None,
+         include_dirs=None):
     r"""Generate wrappers for sources.
 
     The core wrapping routine for fwrap.  Generates wrappers for the sources
@@ -57,7 +58,7 @@ def wrap(sources, name, cfg, output_directory=None, pyf_to_merge=None):
         raise ValueError("Invalid source list. %r" % (sources))
 
     # Parse fortran using fparser, get fortran ast.
-    f_ast = parse(source_files, cfg)
+    f_ast = parse(source_files, cfg, include_dirs=include_dirs)
 
     # Generate wrapper files
     created_files = generate(f_ast, name, cfg, output_directory,
@@ -71,14 +72,14 @@ def wrap(sources, name, cfg, output_directory=None, pyf_to_merge=None):
 def filter_ast(ast, cfg):
     return [routine for routine in ast if cfg.is_routine_included(routine.name)]
 
-def parse(source_files, cfg):
+def parse(source_files, cfg, include_dirs=None):
     r"""Parse fortran code returning parse tree
 
     :Input:
      - *source_files* - (list) List of valid source files
     """
     from fwrap import fwrap_parse, pyf_iface
-    ast = fwrap_parse.generate_ast(source_files)
+    ast = fwrap_parse.generate_ast(source_files, include_dirs=None)
     pyf_iface.check_tree(ast, cfg)
     return ast
 
