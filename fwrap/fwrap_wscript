@@ -144,7 +144,7 @@ def check_numpy_version(conf, minver, maxver=None):
     conf.start_msg("Checking numpy version")
     minver = tuple(minver)
     if maxver: maxver = tuple(maxver)
-    (np_ver_str,) = conf.get_python_variables(conf.env['PYTHON'],
+    (np_ver_str,) = conf.get_python_variables(
             ['numpy.version.short_version'], ['import numpy'])
     np_ver = tuple([int(x) for x in np_ver_str.split('.')])
     if np_ver < minver or (maxver and np_ver > maxver):
@@ -156,7 +156,7 @@ def check_numpy_version(conf, minver, maxver=None):
 @conf
 def get_numpy_includes(conf):
     conf.start_msg("Checking numpy includes")
-    (np_includes,) = conf.get_python_variables(conf.env['PYTHON'],
+    (np_includes,) = conf.get_python_variables(
             ['numpy.get_include()'], ['import numpy'])
     conf.env.INCLUDES_NUMPY = np_includes
     conf.end_msg('ok (%s)' % np_includes)
@@ -169,7 +169,7 @@ def check_cython_version(conf, minver):
     version_re = re.compile(r'cython\s*version\s*(?P<major>\d*)\.(?P<minor>\d*)(?:\.(?P<micro>\d*))?', re.I).search
     cmd = conf.cmd_to_list(conf.env['CYTHON'])
     cmd = cmd + ['--version']
-    from waflib.extras import fc_config
+    from waflib.Tools import fc_config
     stdout, stderr = fc_config.getoutput(conf, cmd)
     if stdout:
         match = version_re(stdout)
