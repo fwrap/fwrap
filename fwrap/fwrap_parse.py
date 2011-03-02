@@ -5,11 +5,16 @@
 
 import re
 import sys
+import os
+import tempfile
+from fwrap.git import execproc
 from contextlib import contextmanager
 from fwrap import pyf_iface as pyf
 from fwrap import fort_expr
 from fparser import api
+import fparser
 from fparser import typedecl_statements
+from fparser.parsefortran import FortranParser
 
 
 @contextmanager
@@ -20,6 +25,83 @@ def max_recursion_depth(n):
         yield
     finally:
         sys.setrecursionlimit(old)
+
+def parse_files(fsrcs, include_dirs):
+    # Turns a list of source files into a list of
+    # fparser...BeginSource
+    result = []
+    for src in fsrcs:
+        reader = fparser.api.get_reader(src, include_dirs=include_dirs,
+                                        ignore_comments=True)
+        parser = FortranParser(reader, ignore_comments=True)
+        with max_recursion_depth(5000):
+            parser.parse()
+        result.append(parser.block)
+    return result
+
+def sort_modules(blocks):
+    # Turns a list of BeginSource into
+    # [nodes in root namespace], { modulename: Module-instance }
+    from fparser.block_statements import Module, EndModule
+    modules = {}
+    root_nodes = []
+    for begsource in blocks:
+        for node in begsource.content:
+            if isinstance(node, Module):
+                modules[node.name] = node
+            elif isinstance(node, EndModule):
+                pass
+            else:
+                root_nodes.append(node)
+    return root_nodes, modules
+
+def analyze_modules(root_nodes, modules):
+    import fparser.statements
+    analyzed = set()
+
+    def lookup_module(name):
+        try:
+            mod = modules[name]
+        except KeyError:
+            raise RuntimeError('Module not available: %s' % name)
+        if name not in analyzed:
+            mod.analyze()
+            analyzed.add(name)
+        return mod
+        
+    # Horrible hack...TODO: fix fparser
+    fparser.statements.Use_lookup_module_callback = lookup_module
+    
+    for name in modules.keys():
+        lookup_module(name)
+
+    for node in root_nodes:
+        node.analyze()
+
+def parse_modules(fsrcs, include_dirs=None):
+    temporaries = []
+    def preprocess(filename):
+        if not filename.endswith('.F90'):
+            return filename
+        path = os.path.split(os.path.realpath(filename))[0]
+        base, ext = os.path.splitext(os.path.basename(filename))
+        fd, tmp = tempfile.mkstemp('.f90', prefix='fw-%s-' % base, dir=path)
+        temporaries.append(tmp)
+        os.close(fd)
+        execproc(['gcc', '-E', '-P', '-o', tmp, x])
+        return tmp
+    
+    try:
+        fsrcs = [preprocess(x) for x in fsrcs]
+        blocks = parse_files(fsrcs, include_dirs)
+    finally:
+        for t in temporaries:
+            if os.path.exists(t):
+                os.unlink(t)
+        
+    root_nodes, modules = sort_modules(blocks)
+    analyze_modules(root_nodes, modules)
+    return root_nodes, modules
 
 def generate_ast(fsrcs, include_dirs=None):
     ast = []

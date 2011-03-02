@@ -124,6 +124,28 @@ def create_cmd(opts):
                 os.unlink(t)
     return 0
 
+def createpkg_cmd(opts):
+    if os.path.exists(opts.packagedir):
+        raise RuntimeError('Path %s exists' % opts.packagedir)
+
+    from fwrap.fwrap_parse import parse_modules
+    root, modules = parse_modules(opts.fortranfiles)
+
+    for module in modules:
+        print module
+
+
+    
+    ## cwd = os.getcwd()
+    ## try:
+    ##     os.chdir(opts.packagedir)
+    ## finally:
+    ##     os.chdir(cwd)
+    
+    ## config_py = '__init__.py'
+    ## pass
+
+
 def update_cmd(opts):
     use_git = check_ok_to_write(opts)
     if not use_git:
@@ -412,6 +434,14 @@ def create_argument_parser():
     configuration.add_cmdline_options(create.add_argument)
     create.add_argument('wrapper_pyx')
     create.add_argument('fortranfiles', metavar='fortranfile', nargs='+')
+
+    #
+    # createpackage command
+    #
+    createpkg = subparsers.add_parser('createpackage')
+    createpkg.set_defaults(func=createpkg_cmd)
+    createpkg.add_argument('packagedir')
+    createpkg.add_argument('fortranfiles', metavar='fortranfile', nargs='+')
     
     #
     # update command
