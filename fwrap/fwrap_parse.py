@@ -63,7 +63,7 @@ def analyze_modules(root_nodes, modules):
         try:
             mod = modules[name]
         except KeyError:
-            raise RuntimeError('Module not available: %s' % name)
+            return # module not available
         if name not in analyzed:
             mod.analyze()
             analyzed.add(name)
@@ -100,145 +100,242 @@ def parse_modules(fsrcs, include_dirs=None):
                 os.unlink(t)
         
     root_nodes, modules = sort_modules(blocks)
+
+    module_asts = {}
     analyze_modules(root_nodes, modules)
-    return root_nodes, modules
+    for name, module in modules.iteritems():
+        iface_tree = FParserToIfaceTransform('fortran').process(module)
+        module_iface_trees[name] = ast
+    root_iface_tree = FParserToIfaceTransform('fortran').process(root_nodes)
+    return root_iface_tree, module_iface_trees
 
 def generate_ast(fsrcs, include_dirs=None):
     ast = []
     for src in fsrcs:
         with max_recursion_depth(5000):
             block = api.parse(src, analyze=True, include_dirs=include_dirs)
-        if src.endswith('.pyf'):
-            ast.extend(_process_pyf(block))
-        else:
-            ast.extend(_process_fortran(block))
+        transform = FParserToIfaceTransform('pyf' if src.endswith('.pyf') else 'fortran')
+        ast.extend(transform.process(block))
     return ast
 
-def _process_pyf(block):
-    callback_modules = {} # name : [proc]
-    regular_procs = []
-    for module in block.content:
-        if module.blocktype !=  'pythonmodule':
-            raise ValueError('not a pythonmodule')
-        procs = []
-        for iface in module.content:
-            if iface.blocktype != 'interface':
-                if iface.blocktype == 'pythonmodule': # end marker
-                    continue
-                raise ValueError('not an interface:' + iface.blocktype)
-            procs.extend(proc for proc in iface.content
-                         if proc.blocktype in ('function', 'subroutine'))
-        if '__user__' in module.name:
-            # Callback specs
-            callback_modules[module.name] = procs
+class FParserToIfaceTransform(object):
+
+    def __init__(self, language):
+        self.language = language
+
+    def process(self, nodes):
+        if self.language == 'pyf':
+            return self.process_pyf(nodes)
+        elif self.language == 'fortran':
+            return self.process_fortran(nodes)
         else:
-            regular_procs.extend(procs)
-    return [_process_proc(proc, 'pyf', callback_modules)
-            for proc in procs]
+            raise ValueError()
 
-def _process_fortran(block):
-    return [_process_proc(proc, 'fortran', None)
-            for proc in block.content]
+    def process_pyf(self, nodes):
+        from fparser.block_statements import ProgramBlock
+        callback_modules = {} # name : [proc]
+        regular_procs = []
+        if isinstance(nodes, ProgramBlock):
+            nodes = nodes.content
+        for module in nodes:
+            if module.blocktype !=  'pythonmodule':
+                raise ValueError('not a pythonmodule')
+            procs = []
+            for iface in module.content:
+                if iface.blocktype != 'interface':
+                    if iface.blocktype == 'pythonmodule': # end marker
+                        continue
+                    raise ValueError('not an interface:' + iface.blocktype)
+                procs.extend(proc for proc in iface.content
+                             if proc.blocktype in ('function', 'subroutine'))
+            if '__user__' in module.name:
+                # Callback specs
+                callback_modules[module.name] = procs
+            else:
+                regular_procs.extend(procs)
+        return [self._process_proc(proc, callback_modules)
+                for proc in procs]
 
-def _process_proc(proc, language, pyf_callback_modules):
-    from fparser.statements import Use
-    if not is_proc(proc):
-        raise ValueError('not a proc')
-    pyf_use = {}
-    kw = {}
-    if language == 'pyf':
-        kw.update(_get_pyf_proc_annotations(proc))
+    def process_fortran(self, block):
+        from fparser.statements import Use, Access, Contains
+        from fparser.typedecl_statements import Implicit, TypeDeclarationStatement
+        from fparser.block_statements import (Function, Subroutine, Interface, Module,
+                                              EndModule)
+                                              
+        self.language = 'fortran'
+        # Assume that all use clauses come before routine definitions
+        self.module_uses = []
+        nodes = block.content
+        if len(nodes) == 1 and isinstance(nodes[0], Module):
+            nodes = nodes[0].content
+        ast = []
+        for node in nodes:
+            if isinstance(node, Use):
+                self.module_uses.append(node.name)
+            elif isinstance(node, (Function, Subroutine)):
+                ast.append(self._process_proc(node, None))
+            elif isinstance(node, (Implicit, TypeDeclarationStatement,
+                                   Interface, Access, Contains, EndModule)):
+                pass # ignore
+            else:
+                raise NotImplementedError("Node type %r" % type(node))
+        return ast
+    
+    def _process_proc(self, proc, pyf_callback_modules):
+        from fparser.statements import Use
+        if not is_proc(proc):
+            raise ValueError('not a proc')
+        pyf_use = {}
+        kw = {}
+        self.proc_uses = []
+        language = self.language
+        if language == 'pyf':
+            kw.update(_get_pyf_proc_annotations(proc))
         for statement in proc.content:
             if isinstance(statement, Use):
-                pyf_use[statement.name] = pyf_callback_modules[statement.name]
-    args = _get_args(proc, language, pyf_use)
-    params = _get_params(proc, language)
-    kw.update(name=proc.name,
-              args=args,
-              params=params,
-              language=language)
-    if proc.blocktype == 'subroutine':
-        return pyf.Subroutine(**kw)
-    elif proc.blocktype == 'function':
-        return pyf.Function(return_arg=_get_ret_arg(proc, language, pyf_use),
-                            **kw)
+                if language == 'pyf':
+                    pyf_use[statement.name] = pyf_callback_modules[statement.name]
+                else:
+                    self.proc_uses.append(statement.name)
+        args = self._get_args(proc, pyf_use)
+        params = self._get_params(proc)
+        kw.update(name=proc.name,
+                  args=args,
+                  params=params,
+                  language=language)
+        if proc.blocktype == 'subroutine':
+            r = pyf.Subroutine(**kw)
+        elif proc.blocktype == 'function':
+            r = pyf.Function(return_arg=self._get_ret_arg(proc, pyf_use),
+                             **kw)
+        del self.proc_uses
+        return r
+
+    def _get_args(self, proc, pyf_use):
+        args = []
+        for argname in proc.args:
+            p_arg = proc.get_variable(argname)
+            args.append(self._get_arg(p_arg, pyf_use))
+        return args
+
+    def _get_params(self, proc):
+        params = []
+        for varname in proc.a.variables:
+            var = proc.a.variables[varname]
+            if var.is_parameter():
+                params.append(self._get_param(var))
+        return params
+
+    def _get_intent(self, arg):
+        assert self.language != 'pyf'
+        intents = []
+        if not arg.intent:
+            intents.append("inout")
+        else:
+            if arg.is_intent_in():
+                intents.append("in")
+            if arg.is_intent_inout():
+                intents.append("inout")
+            if arg.is_intent_out():
+                intents.append("out")
+        if not intents:
+            raise RuntimeError("argument has no intent specified, '%s'" % arg)
+        if len(intents) > 1:
+            raise RuntimeError(
+                    "argument has multiple "
+                        "intents specified, '%s', %s" % (arg, intents))
+        return intents[0]
+
+    def _get_ret_arg(self, proc, pyf_use):
+        ret_var = proc.get_variable(proc.result)
+        ret_arg = self._get_arg(ret_var, pyf_use)
+        ret_arg.intent = None
+        return ret_arg
+
+
+    def _get_param(self, p_param):
+        if not p_param.is_parameter():
+            raise ValueError("argument %r is not a parameter" % p_param)
+        if not p_param.init:
+            raise ValueError("parameter %r does not have an initialization "
+                             "expression." % p_param)
+        p_typedecl = p_param.get_typedecl()
+        dtype = self._get_dtype(p_typedecl)
+        name = p_param.name
+        intent = self._get_intent(p_param)
+        if not p_param.is_scalar():
+            raise RuntimeError("do not support array or derived-type "
+                               "parameters at the moment...")
+        return pyf.Parameter(name=name, dtype=dtype, expr=p_param.init)
+
+    def _get_arg(self, p_arg, pyf_use):
+
+        if not p_arg.is_scalar() and not p_arg.is_array():
+            raise RuntimeError(
+                    "argument %s is neither "
+                        "a scalar or an array (derived type?)" % p_arg)
+
+        if p_arg.is_external():
+            if self.language == 'pyf':
+                return pyf_callback_arg(p_arg, pyf_use)
+            else:
+                return callback_arg(p_arg)
+
+        p_typedecl = p_arg.get_typedecl()
+        dtype = self._get_dtype(p_typedecl)
+        name = p_arg.name
+        if self.language == 'pyf':
+            intent, pyf_annotations = self._get_pyf_arg_annotations(p_arg)
+        else:
+            intent = self._get_intent(p_arg)
+            pyf_annotations = {}
+
+        if p_arg.is_array():
+            p_dims = p_arg.get_array_spec()
+            dimspec = pyf.Dimension(p_dims)
+        else:
+            dimspec = None
+
+        return pyf.Argument(name=name,
+                            dtype=dtype,
+                            intent=intent,
+                            dimension=dimspec,
+                            **pyf_annotations)
+
+    def pyf_callback_arg(self, p_arg, use):
+        for procs in use.values():
+            for proc in procs:
+                if p_arg.name == proc.name:
+                    break
+            else:
+                proc = None
+            if proc is not None:
+                break
+        else:
+            raise ValueError() # no proc
+
+        cbproc = self._process_proc(proc, use)
+        arg = pyf.Argument(name=p_arg.name,
+                            callback_procedure=cbproc,
+                            dtype=pyf.CallbackType(),
+                            intent='in')
+        return arg
+
+    def _get_dtype(self, typedecl):
+        if not typedecl.is_intrinsic():
+            raise RuntimeError(
+                "only intrinsic types supported ATM... [%s]" % str(typedecl))
+        length, kind = typedecl.selector
+        return create_dtype(typedecl.name, length, kind,
+                            possible_modules=self._get_current_modules())
+
+    def _get_current_modules(self):
+        return set(self.module_uses) | set(self.proc_uses)
+
 
 def is_proc(proc):
     return proc.blocktype in ('subroutine', 'function')
 
-def _get_ret_arg(proc, language, pyf_use):
-    ret_var = proc.get_variable(proc.result)
-    ret_arg = _get_arg(ret_var, language, pyf_use)
-    ret_arg.intent = None
-    return ret_arg
-
-def _get_param(p_param, language):
-    if not p_param.is_parameter():
-        raise ValueError("argument %r is not a parameter" % p_param)
-    if not p_param.init:
-        raise ValueError("parameter %r does not have an initialization "
-                         "expression." % p_param)
-    p_typedecl = p_param.get_typedecl()
-    dtype = _get_dtype(p_typedecl, language)
-    name = p_param.name
-    intent = _get_intent(p_param, language)
-    if not p_param.is_scalar():
-        raise RuntimeError("do not support array or derived-type "
-                           "parameters at the moment...")
-    return pyf.Parameter(name=name, dtype=dtype, expr=p_param.init)
-
-def _get_arg(p_arg, language, pyf_use):
-
-    if not p_arg.is_scalar() and not p_arg.is_array():
-        raise RuntimeError(
-                "argument %s is neither "
-                    "a scalar or an array (derived type?)" % p_arg)
-
-    if p_arg.is_external():
-        if language == 'pyf':
-            return pyf_callback_arg(p_arg, pyf_use)
-        else:
-            return callback_arg(p_arg)
-
-    p_typedecl = p_arg.get_typedecl()
-    dtype = _get_dtype(p_typedecl, language)
-    name = p_arg.name
-    if language == 'pyf':
-        intent, pyf_annotations = _get_pyf_arg_annotations(p_arg)
-    else:
-        intent = _get_intent(p_arg, language)
-        pyf_annotations = {}
-
-    if p_arg.is_array():
-        p_dims = p_arg.get_array_spec()
-        dimspec = pyf.Dimension(p_dims)
-    else:
-        dimspec = None
-
-    return pyf.Argument(name=name,
-                        dtype=dtype,
-                        intent=intent,
-                        dimension=dimspec,
-                        **pyf_annotations)
-
-def pyf_callback_arg(p_arg, use):
-    for procs in use.values():
-        for proc in procs:
-            if p_arg.name == proc.name:
-                break
-        else:
-            proc = None
-        if proc is not None:
-            break
-    else:
-        raise ValueError() # no proc
-
-    cbproc = _process_proc(proc, 'pyf', use)
-    arg = pyf.Argument(name=p_arg.name,
-                        callback_procedure=cbproc,
-                        dtype=pyf.CallbackType(),
-                        intent='in')
-    return arg
 
 def callback_arg(p_arg):
     parent_proc = None
@@ -346,41 +443,6 @@ def _get_callback_proc(parent_proc, p_arg, proc_name, arg_lst, is_function):
         
     return cls(**kw)
         
-def _get_args(proc, language, pyf_use):
-    args = []
-    for argname in proc.args:
-        p_arg = proc.get_variable(argname)
-        args.append(_get_arg(p_arg, language, pyf_use))
-    return args
-
-def _get_params(proc, language):
-    params = []
-    for varname in proc.a.variables:
-        var = proc.a.variables[varname]
-        if var.is_parameter():
-            params.append(_get_param(var, language))
-    return params
-
-def _get_intent(arg, language):
-    assert language != 'pyf'
-    intents = []
-    if not arg.intent:
-        intents.append("inout")
-    else:
-        if arg.is_intent_in():
-            intents.append("in")
-        if arg.is_intent_inout():
-            intents.append("inout")
-        if arg.is_intent_out():
-            intents.append("out")
-    if not intents:
-        raise RuntimeError("argument has no intent specified, '%s'" % arg)
-    if len(intents) > 1:
-        raise RuntimeError(
-                "argument has multiple "
-                    "intents specified, '%s', %s" % (arg, intents))
-    return intents[0]
-
 def _get_pyf_proc_annotations(proc):
     from fparser.statements import Intent, CallStatement, FortranName
     pyf_wraps_c = False
@@ -476,14 +538,7 @@ name2type = {
         'logical' : pyf.LogicalType,
         }
 
-def _get_dtype(typedecl, language):
-    if not typedecl.is_intrinsic():
-        raise RuntimeError(
-                "only intrinsic types supported ATM... [%s]" % str(typedecl))
-    length, kind = typedecl.selector
-    return create_dtype(typedecl.name, length, kind)
-
-def create_dtype(name, length, kind):
+def create_dtype(name, length, kind, possible_modules):
     if not kind and not length:
         return name2default[name]
     if length and kind and name != 'character':
@@ -504,10 +559,10 @@ def create_dtype(name, length, kind):
     try:
         int(kind)
     except ValueError:
-        raise RuntimeError(
-                "only integer constant kind "
-                    "parameters supported ATM, given '%s'" % kind)
+        pass # hope it is in possible_modules
+    else:
+        possible_modules = () # no need to carry along these
     if name == 'doubleprecision':
         return pyf.default_dbl
     return name2type[name](fw_ktp="%s_%s" %
-            (name, kind), kind=kind)
+            (name, kind), kind=kind, possible_modules=possible_modules)

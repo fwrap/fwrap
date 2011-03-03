@@ -185,6 +185,9 @@ class CodeSnippet(object):
     def putln(self, line, *args, **kw):
         self.lines.append(_format(line, *args, **kw))
 
+    def putlines(self, lines):
+        self.lines.extend(lines)
+
     def put(self, block, *args, **kw):
         block = dedent(block)
         block = _format(block, *args, **kw)

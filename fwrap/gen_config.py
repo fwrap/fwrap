@@ -26,7 +26,8 @@ def ctp_from_dtype(dtype):
                            fwrap_name=dtype.fw_ktp,
                            odecl=dtype.odecl,
                            npy_enum=dtype.npy_enum,
-                           lang=dtype.lang)
+                           lang=dtype.lang,
+                           possible_modules=dtype.possible_modules)
 
 def ctps_from_dtypes(dtypes):
     return [ctp_from_dtype(dtype)
@@ -44,7 +45,8 @@ def _generate_type_specs(ctps, buf):
                             odecl=ctp.odecl,
                             fwrap_name=ctp.fwrap_name,
                             npy_enum=ctp.npy_enum,
-                            lang=ctp.lang))
+                            lang=ctp.lang,
+                            possible_modules=ctp.possible_modules))
     buf.write(dumps(out_lst))
 
 def read_type_spec(fname):
@@ -159,18 +161,24 @@ def write_pxd(ctps, fbuf, h_name):
 #------------------------------------------------------------------------------
 # -- Factory function; creates _ConfigTypeParam instances. --
 
-def ConfigTypeParam(basetype, odecl, fwrap_name, npy_enum, lang='fortran'):
+def ConfigTypeParam(basetype, odecl, fwrap_name, npy_enum, lang='fortran',
+                    possible_modules=()):
     if lang == 'c':
-        return _CConfigTypeParam(basetype, odecl, fwrap_name, npy_enum)
+        return _CConfigTypeParam(basetype, odecl, fwrap_name, npy_enum,
+                                 possible_modules)
     elif lang == 'fortran':
         if basetype == 'complex':
-            return _CmplxTypeParam(basetype, odecl, fwrap_name, npy_enum)
+            return _CmplxTypeParam(basetype, odecl, fwrap_name, npy_enum,
+                                   possible_modules)
         if basetype == 'character':
-            return _CharTypeParam(basetype, odecl, fwrap_name, npy_enum)
+            return _CharTypeParam(basetype, odecl, fwrap_name, npy_enum,
+                                  possible_modules)
         if basetype == 'logical':
-            return _LogicalTypeParam(basetype, odecl, fwrap_name, npy_enum)
+            return _LogicalTypeParam(basetype, odecl, fwrap_name, npy_enum,
+                                     possible_modules)
         else:
-            return _ConfigTypeParam(basetype, odecl, fwrap_name, npy_enum)
+            return _ConfigTypeParam(basetype, odecl, fwrap_name, npy_enum,
+                                    possible_modules)
     else:
         raise ValueError(
                 "unknown language '%s' not one of 'c' or 'fortran'" % lang)
@@ -190,12 +198,14 @@ class _ConfigTypeParam(object):
     c_preambles = []
     pxd_cimports = []
 
-    def __init__(self, basetype, odecl, fwrap_name, npy_enum):
+    def __init__(self, basetype, odecl, fwrap_name, npy_enum,
+                 possible_modules):
         self.basetype = basetype
         self.odecl = odecl
         self.fwrap_name = fwrap_name
         self.npy_enum = npy_enum
         self.fc_type = None
+        self.possible_modules = list(possible_modules)
 
     def __eq__(self, other):
         return self.basetype == other.basetype and \

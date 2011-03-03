@@ -299,7 +299,7 @@ def find_types(bld, ctps):
         fc_type = None
         if ctp.lang == 'fortran':
             fc_type = find_fc_type(bld, ctp.basetype,
-                        ctp.odecl)
+                        ctp.odecl, ctp.possible_modules)
         elif ctp.lang == 'c':
             fc_type = find_c_type(bld, ctp)
         if not fc_type:
@@ -309,10 +309,12 @@ def find_types(bld, ctps):
 
 
 fc_type_memo = {}
-def find_fc_type(bld, basetype, decl):
+def find_fc_type(bld, basetype, decl, possible_modules):
     res = fc_type_memo.get((basetype, decl), None)
     if res is not None:
         return res
+
+    MODULES = '\n'.join('use %s' % x for x in possible_modules)
 
     if basetype == 'logical':
         basetype = 'integer'
@@ -321,11 +323,13 @@ def find_fc_type(bld, basetype, decl):
     fsrc_tmpl = '''\
 subroutine outer(a)
   use, intrinsic :: iso_c_binding
+  %(MODULES)s
   implicit none
   %(TEST_DECL)s, intent(inout) :: a
   interface
     subroutine inner(a)
       use, intrinsic :: iso_c_binding
+      %(MODULES)s
       implicit none
       %(TYPE_DECL)s, intent(inout) :: a
     end subroutine inner
@@ -336,7 +340,8 @@ end subroutine outer
     for ctype in gc.type_dict[basetype]:
         test_decl = '%s(kind=%s)' % (basetype, ctype)
         fsrc = fsrc_tmpl % {'TYPE_DECL' : decl,
-                            'TEST_DECL' : test_decl}
+                            'TEST_DECL' : test_decl,
+                            'MODULES' : MODULES}
         try:
             bld.check_cc(
                     fragment=fsrc,

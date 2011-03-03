@@ -64,7 +64,7 @@ class Dtype(object):
 
     def __init__(self, fw_ktp, mangler, lang='fortran',
                  length=None, kind=None,
-                 cname=None):
+                 cname=None, possible_modules=()):
 
         if not valid_fort_name(fw_ktp):
             raise InvalidNameException(
@@ -90,6 +90,8 @@ class Dtype(object):
         #XXX: refactor this with lang
         self.cname = cname
         self.npy_enum = "%s_enum" % self.fw_ktp
+
+        self.possible_modules = frozenset(possible_modules)
 
     def _get_odecl(self):
 
@@ -663,7 +665,6 @@ class ArgManager(object):
         assert None not in self._args
         assert None not in self._params        
         self._trim_params()
-        self._check_namespace()
 
     def _trim_params(self):
         # remove params that aren't necessary as part of an argument
@@ -674,7 +675,7 @@ class ArgManager(object):
         while queue:
             o = queue.pop()
             for depname in o.depends():
-                dep = name2o[depname]
+                dep = name2o.get(depname, object()) # default to non-matching object
                 if depname in name2o:
                     # Make sure we get all dependencies in the tree.
                     queue.append(dep)
@@ -705,16 +706,6 @@ class ArgManager(object):
         for o in (self._args + self._params):
             req_names.update(o.depends())
         return req_names
-
-    def _check_namespace(self):
-        provided_names = self._provided_names()
-        required_names = self._required_names()
-
-        left_out = required_names - provided_names
-
-        if left_out:
-            raise RuntimeError(
-                    "Required names not provided by scope %r" % list(left_out))
 
     def parameters(self):
         return self._params
