@@ -162,10 +162,12 @@ def _format(s, *args, **kw):
         return s
 
 class CodeSnippet(object):
-    def __init__(self, provides, requires=(), code=None, *args, **kw):
+    def __init__(self, provides, requires=(), soft_requires=(),
+                 code=None, *args, **kw):
         self.provides = provides
         if isinstance(requires, basestring):
             raise ValueError('requires must be an iterable or set')
+        self.soft_requires = frozenset(soft_requires)
         self.requires = frozenset(requires)
         self.lines = []
         if code is None:
@@ -203,8 +205,8 @@ class CodeSnippet(object):
         return not self == other
 
     def __repr__(self):
-        return '<CodeSnippet provides=%r requires=%r lines=%r>' % (
-            self.provides, self.requires, '\n'.join(self.lines))
+        return '<CodeSnippet provides=%r requires=%r soft_requires=%r lines=%r>' % (
+            self.provides, self.requires, self.soft_requires, '\n'.join(self.lines))
 
 
 def merge_code_snippets(snippets):
@@ -225,6 +227,7 @@ def merge_code_snippets(snippets):
         if group is not None:
             merged = CodeSnippet(provides=s.provides,
                                  requires=frozenset.union(*[t.requires for t in group]),
+                                 soft_requires=frozenset.union(*[t.soft_requires for t in group]),
                                  code=sum([t.lines for t in group], []))
             result.append(merged)
             del by_requires[s.provides]
@@ -269,12 +272,12 @@ def topological_sort(input_nodes):
             # complexity, but we will only use this code for tens of
             # nodes and readability is more important than coming up
             # with something more clever.
-            requires = set(node.requires)
+            requires = set(node.requires) | set(node.soft_requires)
             for y in input_nodes:
                 if y.provides in requires:
                     requires.remove(y.provides)
                     visit(y)
-            if len(requires) != 0:
+            if len(requires - node.soft_requires) != 0:
                 raise DependencyException('Node(s) not present: %s' % ', '.join(
                     repr(x) for x in requires))
             result.append(node)

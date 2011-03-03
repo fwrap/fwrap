@@ -14,10 +14,10 @@ from nose.tools import ok_, eq_, set_trace, assert_raises
 
 def graph_closure():
     nodes = []
-    def node(provides, requires):
-        cs = CodeSnippet(provides, requires)
-        if requires:
-            cs.putln('Put on %s (requires %s)' % (provides, ', '.join(requires)))
+    def node(provides, requires, soft_requires=[]):
+        cs = CodeSnippet(provides, requires, soft_requires)
+        if requires or soft_requires:
+            cs.putln('Put on %s (requires %s)' % (provides, ', '.join(requires + soft_requires)))
         else:
             cs.putln('Put on %s' % provides)
         nodes.append(cs)
@@ -50,9 +50,9 @@ def test_basic():
     # Build a DAG
     nodes, node = graph_closure()
 
-    node('space suit', ['sweater'])
+    node('space suit', ['sweater'], soft_requires=['does-not-exist'])
     node('socks', [])
-    node('pants', ['underwear'])
+    node('pants', [], soft_requires=['underwear'])
     node('t-shirt', [])
     node('sweater', ['t-shirt'])
     node('underwear', [])
@@ -65,7 +65,7 @@ def test_basic():
         Put on pants (requires underwear)
         Put on t-shirt
         Put on sweater (requires t-shirt)
-        Put on space suit (requires sweater)
+        Put on space suit (requires sweater, does-not-exist)
         Put on space suit (requires pants)
         Put on socks
         '''))
@@ -82,7 +82,7 @@ def test_basic():
         Put on t-shirt
         Put on sweater (requires t-shirt)
         Put on space suit (requires pants)
-        Put on space suit (requires sweater)
+        Put on space suit (requires sweater, does-not-exist)
         '''))
 
 def test_infloop():
