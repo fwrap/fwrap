@@ -235,8 +235,11 @@ class FwrapRunTestCase(FwrapCompileTestCase):
             self.runTest()
             if self.projdir not in sys.path:
                 sys.path.insert(0, self.projdir)
-            doctest_mod_base = self.projname+'_doctest'
-            doctest_mod_fqpath = os.path.join(self.directory, doctest_mod_base+'.py')
+            if self.is_dir:
+                doctest_mod_fqpath = os.path.join(self.directory, self.filename, 'doctest.py')
+            else:
+                doctest_mod_base = self.projname+'_doctest'
+                doctest_mod_fqpath = os.path.join(self.directory, doctest_mod_base+'.py')
             testname = self.projname + '_doctest' + ('_f2py' if self.use_f2py else '')
             assert os.path.isdir(self.projdir)
             shutil.copyfile(doctest_mod_fqpath, os.path.join(self.projdir, testname) + '.py')
