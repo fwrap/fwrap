@@ -90,7 +90,7 @@ def build(bld):
         name = 'fwrapper',
         rule = '${PYTHON} ${FWRAPPER} --name=%s %s ${FWRAPPER_OPTS} ${SRC}' % (
             bld.env['FW_PROJ_NAME'], ' '.join(flags)),
-        source = bld.srcnode.ant_glob(['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']),
+        source = bld.srcnode.ant_glob(incl=['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']),
         target = target
         )
 
@@ -105,7 +105,7 @@ def build(bld):
     if not want_f77:
         bld(
             features = 'c fc typemap pyext cshlib',
-            source = bld.srcnode.ant_glob(['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']) +
+            source = bld.srcnode.ant_glob(incl=['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']) +
                      [cy_src],
             wrapper = wrapper,
             typemap = 'fwrap_type_specs.in',
@@ -123,7 +123,7 @@ def build(bld):
         bld(
             after = 'generate_typemap',
             features = 'c fc pyext cshlib',
-            source = bld.srcnode.ant_glob(['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']) +
+            source = bld.srcnode.ant_glob(incl=['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']) +
                      [cy_src],
             target = bld.env['FW_PROJ_NAME'],
             use = 'fcshlib CLIB NUMPY',
