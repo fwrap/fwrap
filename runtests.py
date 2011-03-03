@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os, sys, re, shutil, unittest, doctest, contextlib
+from glob import glob
 from StringIO import StringIO
 
 WITH_CYTHON = True
@@ -71,11 +72,12 @@ class FwrapTestBuilder(object):
 
         suite = unittest.TestSuite()
         filenames = os.listdir(path)
-        filenames.sort()
         for filename in filenames:
-            if os.path.splitext(filename)[1].lower() not in (".f", ".f77", ".f90", ".f95"):
+            is_subdir = os.path.isdir(os.path.join(path, filename))
+            if (not is_subdir and
+                (os.path.splitext(filename)[1].lower() not in (".f", ".f77", ".f90", ".f95") or
+                 filename.startswith('.'))):
                 continue
-            if filename.startswith('.'): continue # certain emacs backup files
             basename = os.path.splitext(filename)[0]
             fqbasename = "%s.%s" % (context, basename)
             if not [1 for match in self.selectors if match(fqbasename)]:
@@ -87,7 +89,10 @@ class FwrapTestBuilder(object):
                 test_class = FwrapRunTestCase
             else:
                 test_class = FwrapCompileTestCase
-            flag_sets = parse_testcase_flag_sets(os.path.join(path, filename))
+            if not is_subdir:
+                flag_sets = parse_testcase_flag_sets(os.path.join(path, filename))
+            else:
+                flag_sets = [[]] #TODO
             for extra_flags in flag_sets:
                 use_f2py = '--f2py-comparison' in extra_flags
                 if use_f2py:
@@ -124,6 +129,7 @@ class FwrapCompileTestCase(unittest.TestCase):
         self.verbosity = verbosity
         self.configure_flags = configure_flags
         self.use_f2py = use_f2py
+        self.is_dir = os.path.isdir(os.path.join(directory, filename))
         unittest.TestCase.__init__(self)
 
     def shortDescription(self):
@@ -157,10 +163,14 @@ class FwrapCompileTestCase(unittest.TestCase):
         self.projname = base + '_fwrap'
         self.projdir = os.path.join(self.workdir, base + ('_f2py' if self.use_f2py else '_fwrap'))
         fq_fname = os.path.join(os.path.abspath(self.directory), self.filename)
-        pyf_file = '%s.pyf' % os.path.splitext(fq_fname)[0]
-        if not os.path.exists(pyf_file):
+        if self.is_dir:
+            source_files = glob(os.path.join(fq_fname, '*.f90'))
             pyf_file = None
-        source_files = [fq_fname]
+        else:
+            pyf_file = '%s.pyf' % os.path.splitext(fq_fname)[0]
+            if not os.path.exists(pyf_file):
+                pyf_file = None
+            source_files = [fq_fname]
         if self.use_f2py:
             self.compile_f2py(source_files, pyf_file)
         else:
