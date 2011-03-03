@@ -5,6 +5,8 @@
 
 from fwrap import pyf_iface as pyf
 from fwrap import constants
+from fwrap import code
+from fwrap.code import CodeSnippet
 
 def _arg_name_mangler(name):
     return "fw_%s" % name
@@ -98,6 +100,7 @@ class FcProcedure(object):
         self.pyf_wraps_c = wrapped.pyf_wraps_c
         self.language = wrapped.language
         self.kind = wrapped.kind
+        self.arg_wrappers = self.arg_man.arg_wrappers
 
     def _get_arg_man(self):
         self.arg_man = FcArgManager(self.wrapped)
@@ -117,9 +120,12 @@ class FcProcedure(object):
                 buf.putln(line)
             buf.putln("character C_NULL_CHAR")
             buf.putln("parameter (C_NULL_CHAR = '\\0')")
-        for declaration in (self.arg_declarations(cfg) +
-                            self.param_declarations(cfg)):
-            buf.putln(declaration)
+
+        snippets = []
+        snippets.extend(self.arg_declarations(cfg))
+        snippets.extend(self.param_declarations(cfg))
+        # Do a stable topological sort and emit code
+        code.emit_code_snippets(snippets, buf)
 
     def generate_wrapper(self, buf, cfg, gmn=constants.KTP_MOD_NAME):
         buf.putln(self.proc_declaration(cfg))
@@ -150,10 +156,18 @@ class FcProcedure(object):
         return self.arg_man.extern_arg_list()
 
     def arg_declarations(self, cfg):
-        return self.arg_man.arg_declarations(cfg)
+        for argw in self.arg_wrappers:
+            cs = CodeSnippet(provides=('arg_decl', argw.name))
+            cs.putlines(argw.extern_declarations(cfg))
+            yield cs
 
     def param_declarations(self, cfg):
-        return self.arg_man.param_declarations(cfg)
+        for param in self.wrapped.arg_man.parameters():
+            cs = CodeSnippet(provides=('param_decl', param.name),
+                             soft_requires=(('param_decl', x.name)
+                                           for x in param.depends()))
+            cs.putlines(param.declaration(cfg))
+            yield cs
 
     def pre_call_code(self, buf, cfg):
         for line in self.arg_man.pre_call_code(cfg):
@@ -220,7 +234,7 @@ class FcFunction(FcProcedure):
 
 
 class FcArgManager(object):
-
+    # TODO: Get rid of this, merge with with ProcWrapper at least
     def __init__(self, proc):
         self.proc = proc
         self.isfunction = (proc.kind == 'function')
@@ -273,20 +287,6 @@ class FcArgManager(object):
 
     def c_proto_return_type(self):
         return 'void'
-
-    def param_declarations(self, cfg):
-        proc_arg_man = self.proc.arg_man
-        decls = []
-        for o in proc_arg_man.order_declarations():
-            if isinstance(o, pyf.Parameter):
-                decls.append(o.declaration(cfg))
-        return decls
-
-    def arg_declarations(self, cfg):
-        decls = []
-        for argw in self.arg_wrappers:
-            decls.extend(argw.extern_declarations(cfg))
-        return decls
 
     def __return_spec_declaration(self):
         #XXX: demeter ???

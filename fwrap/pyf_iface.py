@@ -4,6 +4,8 @@
 #------------------------------------------------------------------------------
 
 from fwrap import fort_expr
+from fwrap import code
+from fwrap.code import CodeSnippet
 from intrinsics import intrinsics
 import re
 from configuration import default_cfg
@@ -714,31 +716,8 @@ class ArgManager(object):
             raise RuntimeError(
                     "Required names not provided by scope %r" % list(left_out))
 
-    def order_declarations(self):
-        decl_list = []
-        decl_set = set()
-        undeclared = list(self._args) + list(self._params)
-        while undeclared:
-            undecl_cpy = undeclared[:]
-            for arg in undecl_cpy:
-                deps = arg.depends()
-                if not deps or deps <= decl_set.union(intrinsics):
-                    decl_list.append(arg)
-                    decl_set.add(arg.name)
-                    undeclared.remove(arg)
-            assert len(undecl_cpy) > len(undeclared)
-        assert not undeclared
-        assert len(decl_list) == len(self._args) + len(self._params)
-        return decl_list
-
-    def arg_declarations(self, cfg=default_cfg):
-        decls = []
-        od = self.order_declarations()
-        for arg in od:
-            decls.append(arg.declaration(cfg))
-        if self._return_arg:
-            decls.append(self._return_arg.declaration(cfg))
-        return decls
+    def parameters(self):
+        return self._params
 
     def return_var_name(self):
         return self._return_arg.name
@@ -756,6 +735,7 @@ class Procedure(AstNode):
     name = None
     args = ()
     arg_man = None
+    return_arg = None
     params = ()
     language = 'fortran'
     kind = None
@@ -773,7 +753,14 @@ class Procedure(AstNode):
         return self.arg_man.extern_arg_list()
 
     def arg_declarations(self, cfg=default_cfg):
-        return self.arg_man.arg_declarations(cfg)
+        decls = []
+        args = list(self.args)
+        if self.return_arg:
+            args.append(self.return_arg)
+        for arg in args:
+            yield CodeSnippet(('decl', arg.name),
+                              soft_requires=[('decl', x) for x in arg.depends()],
+                              code=arg.declaration(cfg))
 
     def proc_declaration(self, cfg):
         return ("%s %s(%s)" %
@@ -783,8 +770,8 @@ class Procedure(AstNode):
         if not cfg.f77binding:
             buf.putln('use %s' % ktp_mod)
         buf.putln('implicit none')
-        for decl in self.arg_declarations(cfg):
-            buf.putln(decl)
+        snippets = list(self.arg_declarations())
+        code.emit_code_snippets(snippets, buf)
 
     def proc_end(self):
         return "end %s %s" % (self.kind, self.name)
