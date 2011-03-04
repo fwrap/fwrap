@@ -41,7 +41,7 @@ def configure(conf):
     conf.find_program('cython', var='CYTHON')
     conf.check_cython_version(minver=(0,11,1))
 
-    conf.find_program(['fwrapper'], var='FWRAPPER')
+    conf.find_program(['fwrap'], var='FWRAP')
 
     conf.env['FW_PROJ_NAME'] = conf.options.name
     conf.env['FW_F77_BINDING'] = conf.options.f77binding
@@ -49,7 +49,7 @@ def configure(conf):
     conf.env['FW_TEMPLATE'] = conf.options.template
     conf.env['FW_EMULATE_F2PY'] = conf.options.emulate_f2py
     conf.env['FW_NO_CPDEF'] = conf.options.no_cpdef
-    conf.env['FWRAPPER_OPTS'] = ''
+    conf.env['FWRAP_OPTS'] = ''
     conf.env['FW_PYF'] = conf.options.pyf
 
     conf.add_os_flags('INCLUDES')
@@ -87,9 +87,9 @@ def build(bld):
         flags.append('--pyf=%s' % bld.env['FW_PYF'])
 
     bld(
-        name = 'fwrapper',
-        rule = '${PYTHON} ${FWRAPPER} --name=%s %s ${FWRAPPER_OPTS} ${SRC}' % (
-            bld.env['FW_PROJ_NAME'], ' '.join(flags)),
+        name = 'fwrap',
+        rule = '${PYTHON} ${FWRAP} create ${FWRAP_OPTS} %s %s.pyx ${SRC}' % (
+            ' '.join(flags), bld.env['FW_PROJ_NAME']),
         source = bld.srcnode.ant_glob(incl=['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']),
         target = target
         )
