@@ -166,17 +166,27 @@ class FParserToIfaceTransform(object):
         # Assume that all use clauses come before routine definitions
         self.module_uses = []
         nodes = block.content
-        if len(nodes) == 1 and isinstance(nodes[0], Module):
-            nodes = nodes[0].content
+        module = None
+        if isinstance(nodes[0], Module):
+            if not len(nodes) == 1:
+                raise NotImplementedError(
+                    'More than one module; please use the createpackage command')
+                # We could throw them into the same Python namespace *shrug*
+            module = nodes[0]
+            nodes = module.content
         ast = []
         for node in nodes:
             if isinstance(node, Use):
                 self.module_uses.append(node.name)
             elif isinstance(node, (Function, Subroutine)):
-                ast.append(self._process_proc(node, None))
+                if module is not None and module.check_private(node.name):
+                    # Private proc
+                    continue
+                else:
+                    ast.append(self._process_proc(node, None))
             elif isinstance(node, (Implicit, TypeDeclarationStatement,
                                    Interface, Access, Contains, EndModule)):
-                pass # ignore
+                continue # ignore
             else:
                 raise NotImplementedError("Node type %r" % type(node))
         return ast
