@@ -236,7 +236,8 @@ class FwrapRunTestCase(FwrapCompileTestCase):
             if self.projdir not in sys.path:
                 sys.path.insert(0, self.projdir)
             if self.is_dir:
-                doctest_mod_fqpath = os.path.join(self.directory, self.filename, 'doctest.py')
+                doctest_mod_fqpath = os.path.join(self.directory, self.filename,
+                                                  self.filename + '_doctest.py')
             else:
                 doctest_mod_base = self.projname+'_doctest'
                 doctest_mod_fqpath = os.path.join(self.directory, doctest_mod_base+'.py')
