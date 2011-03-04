@@ -92,7 +92,7 @@ endif
 class FcProcedure(object):
 
     def __init__(self, wrapped):
-        self.name = constants.PROC_SUFFIX_TMPL % wrapped.name
+        self.module_name = wrapped.module_name
         self.wrapped = wrapped
         self.arg_man = None
         self._get_arg_man()
@@ -102,6 +102,11 @@ class FcProcedure(object):
         self.kind = wrapped.kind
         self.arg_wrappers = self.arg_man.arg_wrappers
 
+        self.fc_name = constants.FC_PROC_EXPORT_TMPL % (
+            '' if self.module_name is None else self.module_name,
+            wrapped.name)
+
+
     def _get_arg_man(self):
         self.arg_man = FcArgManager(self.wrapped)
 
@@ -109,11 +114,13 @@ class FcProcedure(object):
         return self.wrapped.name
 
     def proc_end(self):
-        return "end subroutine %s" % self.name
+        return "end subroutine %s" % self.fc_name
 
     def proc_preamble(self, ktp_mod, buf, cfg):
         if not cfg.f77binding:
             buf.putln('use %s' % ktp_mod)
+        if self.module_name is not None:
+            buf.putln('use %s, only: %s' % (self.module_name, self.wrapped.name))
         buf.putln('implicit none')
         if cfg.f77binding:
             for line in constants.get_fortran_constants_utility_code(f77=True):
@@ -131,7 +138,9 @@ class FcProcedure(object):
         buf.putln(self.proc_declaration(cfg))
         buf.indent()
         self.proc_preamble(gmn, buf, cfg)
-        generate_interface(self.wrapped, buf, cfg, gmn)
+        if self.module_name is None:
+            # For module-less procs we need to redeclare them in an interface block
+            generate_interface(self.wrapped, buf, cfg, gmn)
         self.temp_declarations(buf, cfg)
         self.pre_call_code(buf, cfg)
         self.proc_call(buf, cfg)
@@ -142,11 +151,11 @@ class FcProcedure(object):
     def proc_declaration(self, cfg):
         if not cfg.f77binding:
             return 'subroutine %s(%s) bind(c, name="%s")' % \
-                   (self.name, ', '.join(self.extern_arg_list()),
-                    self.name)
+                   (self.fc_name, ', '.join(self.extern_arg_list()),
+                    self.fc_name)
         else:
             return 'subroutine %s(%s) ' % \
-                   (self.name, ', '.join(self.extern_arg_list()))
+                   (self.fc_name, ', '.join(self.extern_arg_list()))
 
     def temp_declarations(self, buf, cfg):
         for declaration in self.arg_man.temp_declarations(cfg):
@@ -194,19 +203,19 @@ class FcProcedure(object):
         else:
             return "FORTRAN_CALLSPEC %s F_FUNC(%s,%s)(%s);" % (
                 self.arg_man.c_proto_return_type(),
-                self.name.lower(),
-                self.name.upper(),
+                self.fc_name.lower(),
+                self.fc_name.upper(),
                 ", ".join(self.arg_man.c_proto_args()))
 
     def c_mangle_define(self):
-        return '#define %s F_FUNC(%s,%s)' % (self.name,
-                                             self.name.lower(),
-                                             self.name.upper())
+        return '#define %s F_FUNC(%s,%s)' % (self.fc_name,
+                                             self.fc_name.lower(),
+                                             self.fc_name.upper())
 
     def cy_prototype(self):
         args = ", ".join(self.arg_man.c_proto_args())
         return ('%s %s(%s)' % (self.arg_man.c_proto_return_type(),
-                                self.name, args))
+                                self.fc_name, args))
 
     def all_dtypes(self):
         return self.arg_man.all_dtypes()

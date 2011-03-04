@@ -544,6 +544,7 @@ class Argument(AstNode):
     isvalue = None
     is_return_arg = False
     dimension = None
+    module_name = None
 
     # When an argument is a callback argument, it has a nested
     # Procedure node describing the signature

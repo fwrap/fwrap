@@ -166,20 +166,20 @@ class FParserToIfaceTransform(object):
         # Assume that all use clauses come before routine definitions
         self.module_uses = []
         nodes = block.content
-        module = None
+        self.module = None
         if isinstance(nodes[0], Module):
             if not len(nodes) == 1:
                 raise NotImplementedError(
                     'More than one module; please use the createpackage command')
                 # We could throw them into the same Python namespace *shrug*
-            module = nodes[0]
-            nodes = module.content
+            self.module = nodes[0]
+            nodes = self.module.content
         ast = []
         for node in nodes:
             if isinstance(node, Use):
                 self.module_uses.append(node.name)
             elif isinstance(node, (Function, Subroutine)):
-                if module is not None and module.check_private(node.name):
+                if self.module is not None and self.module.check_private(node.name):
                     # Private proc
                     continue
                 else:
@@ -189,6 +189,7 @@ class FParserToIfaceTransform(object):
                 continue # ignore
             else:
                 raise NotImplementedError("Node type %r" % type(node))
+        self.module = None
         return ast
     
     def _process_proc(self, proc, pyf_callback_modules):
@@ -212,6 +213,7 @@ class FParserToIfaceTransform(object):
         kw.update(name=proc.name,
                   args=args,
                   params=params,
+                  module_name=None if self.module is None else self.module.name,
                   language=language)
         if proc.blocktype == 'subroutine':
             r = pyf.Subroutine(**kw)

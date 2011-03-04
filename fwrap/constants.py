@@ -3,7 +3,7 @@
 # All rights reserved. See LICENSE.txt.
 #------------------------------------------------------------------------------
 
-PROC_SUFFIX_TMPL = "%s_c"
+FC_PROC_EXPORT_TMPL = "fw_%s_%s"
 
 KTP_MOD_NAME = "fwrap_ktp_mod"
 KTP_MOD_SRC = "%s.f90" % KTP_MOD_NAME

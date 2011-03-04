@@ -53,7 +53,7 @@ def fc_proc_to_cy_proc(fc_proc):
     return CyProcedure.create_node_from(
         fc_proc,
         name=fc_proc.wrapped_name(), # remove when FcProcedure is refactored
-        fc_name=fc_proc.name, # ditto
+        fc_name=fc_proc.fc_name, # ditto
         cy_name=cy_name,
         call_args=get_call_args(args),
         in_args=get_in_args(args),
