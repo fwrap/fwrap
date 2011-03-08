@@ -36,9 +36,12 @@ def ctps_from_dtypes(dtypes):
 
 def generate_type_specs(ast, buf):
     ctps = extract_ctps(ast)
-    _generate_type_specs(ctps, buf)
+    pickle_type_specs(ctps, buf)
 
-def _generate_type_specs(ctps, buf):
+def pickle_type_specs(ctps, buf=None):
+    if buf is None:
+        from fwrap.code import CodeBuffer
+        buf = CodeBuffer()
     out_lst = []
     for ctp in ctps:
         out_lst.append(dict(basetype=ctp.basetype,
@@ -48,6 +51,7 @@ def _generate_type_specs(ctps, buf):
                             lang=ctp.lang,
                             possible_modules=ctp.possible_modules))
     buf.write(dumps(out_lst))
+    return buf
 
 def read_type_spec(fname):
     from cPickle import loads

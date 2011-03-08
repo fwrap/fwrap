@@ -17,8 +17,6 @@ def parse_testcase_flag_sets(filename):
     result = []
     for m in flags_re.finditer(contents):
         result.append(m.group(2).split())
-    if len(result) == 0:
-        result = [[]]
     return result
 
 @contextlib.contextmanager
@@ -89,10 +87,15 @@ class FwrapTestBuilder(object):
                 test_class = FwrapRunTestCase
             else:
                 test_class = FwrapCompileTestCase
+            target_path = os.path.join(path, filename)
             if not is_subdir:
-                flag_sets = parse_testcase_flag_sets(os.path.join(path, filename))
+                flag_sets = parse_testcase_flag_sets(target_path)
             else:
-                flag_sets = [[]] #TODO
+                flag_sets = []
+                for x in os.listdir(target_path):
+                    flag_sets.extend(parse_testcase_flag_sets(os.path.join(target_path, x)))
+            if len(flag_sets) == 0:
+                flag_sets = [[]]
             for extra_flags in flag_sets:
                 use_f2py = '--f2py-comparison' in extra_flags
                 if use_f2py:
@@ -177,16 +180,33 @@ class FwrapCompileTestCase(unittest.TestCase):
             self.compile_fwrap(source_files, pyf_file)
 
     def compile_fwrap(self, source_files, pyf_file):
-        # fwrapc.py configure build fsrc...
-        conf_flags = self.configure_flags
-        if pyf_file is not None:
-            conf_flags.append('--pyf=%s' % pyf_file)
-        argv = ['configure'] + conf_flags + ['build',
-                '--name=%s' % self.projname,
-                '--outdir=%s' % self.projdir]
-        argv += source_files
-        argv += ['install']
-        fwrapc(argv=argv)
+        if '--package' in self.configure_flags:            
+            assert pyf_file is None
+            from fwrap.fwrapcmd import fwrap_main
+            from subprocess import check_call
+            # Create Cython wrapper
+            flags = [x for x in self.configure_flags if x != '--package']
+            fwrap_main(['createpackage', '--copy-sources', '-o', self.projdir] + flags +
+                       [self.projname] + source_files)
+            py_exe = sys.executable
+            cwd = os.getcwd()
+            try:
+                os.chdir(self.projdir)
+                check_call([py_exe, 'waf', 'configure', 'build', '-v', 'install'])
+            finally:
+                os.chdir(cwd)
+        else:
+            from fwrap.fwrapc import fwrapc
+            # fwrapc.py configure build fsrc...
+            conf_flags = self.configure_flags
+            if pyf_file is not None:
+                conf_flags.append('--pyf=%s' % pyf_file)
+            argv = ['configure'] + conf_flags + ['build',
+                    '--name=%s' % self.projname,
+                    '--outdir=%s' % self.projdir]
+            argv += source_files
+            argv += ['install']
+            fwrapc(argv=argv)
 
     def compile_f2py(self, source_files, pyf_file):
         from numpy.f2py.f2py2e import main as f2pymain
@@ -308,8 +328,6 @@ if __name__ == '__main__':
             shutil.rmtree(os.path.join(WORKDIR, path), ignore_errors=True)
     if not os.path.exists(WORKDIR):
         os.makedirs(WORKDIR)
-
-    from fwrap.fwrapc import fwrapc
 
     sys.stderr.write("Python %s\n" % sys.version)
     sys.stderr.write("\n")

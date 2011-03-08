@@ -26,6 +26,7 @@ from fwrap.git import execproc
 BRANCH_PREFIX = '_fwrap'
 BRANCH = '_fwrap'
 PYF_BRANCH = '_fwrap+pyf'
+FWRAP_PATH = os.path.abspath(os.path.dirname(__file__))
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -125,26 +126,70 @@ def create_cmd(opts):
     return 0
 
 def createpkg_cmd(opts):
-    if os.path.exists(opts.packagedir):
-        raise RuntimeError('Path %s exists' % opts.packagedir)
-
+    from fwrap.constants import (TYPE_SPECS_SRC, CY_PXD_TMPL, CY_PYX_TMPL,
+                                 CY_PYX_IN_TMPL, FC_PXD_TMPL, FC_F_TMPL,
+                                 FC_F_TMPL_F77, FC_HDR_TMPL)
     from fwrap.fwrap_parse import parse_modules
-    root, modules = parse_modules(opts.fortranfiles)
+    from fwrap import gen_config as gen_config
 
-    for module in modules:
-        print module
+    if opts.output_dir is None:
+        opts.output_dir = '.'
+    target_path = os.path.join(opts.output_dir, opts.packagename)
+    if os.path.exists(target_path):
+        raise RuntimeError('Path %s exists' % target_path)
 
+    cfg = Configuration('__init__.py', cmdline_options=opts)
+    if cfg.f77binding:
+        raise NotImplementedError()
+    for filename in opts.fortranfiles:
+        cfg.add_wrapped_file(filename)
 
+    modules = parse_modules(opts.fortranfiles)
+
+    # Make package source files
+    os.makedirs(target_path)
+    dtypes = set()
+
+    def put(buf, filename):
+        fwrapper.write_to_dir(target_path, filename, buf)
+
+    for name, ast in modules.iteritems():
+        if len(ast) == 0:
+            continue
+        fc_ast = fc_wrap.wrap_pyf_iface(ast)
+        cython_ast = cy_wrap.wrap_fc(fc_ast)
+
+        put(fwrapper.generate_fc_f(fc_ast, name, cfg), FC_F_TMPL % name)
+        put(fwrapper.generate_fc_h(fc_ast, name, cfg), FC_HDR_TMPL % name)
+        put(fwrapper.generate_fc_pxd(fc_ast, name), FC_PXD_TMPL % name)
+        put(fwrapper.generate_cy_pyx(cython_ast, name, cfg, True, False),
+            (CY_PYX_IN_TMPL if cfg.detect_templates else CY_PYX_TMPL) % name)
+        put(fwrapper.generate_cy_pxd(cython_ast, name, cfg),
+            CY_PXD_TMPL % name)
+
+        for proc in fc_ast:
+            dtypes.update(proc.all_dtypes())
+    ctps = gen_config.ctps_from_dtypes(list(dtypes))
+    put(gen_config.pickle_type_specs(ctps), TYPE_SPECS_SRC)
+
+    # Provide build system
+    os.makedirs(os.path.join(opts.output_dir, 'tools'))
+    shutil.copy(os.path.join(FWRAP_PATH, 'fwrap_wscript_poweruser.py'),
+                os.path.join(opts.output_dir, 'wscript'))
+    for x in 'numpy cython fwrapktp'.split():
+        shutil.copy(os.path.join(FWRAP_PATH, 'tools', x + '.py'),
+                    os.path.join(opts.output_dir, 'tools'))
+
+    shutil.copy(os.path.join(FWRAP_PATH, 'waf'),
+                opts.output_dir)
     
-    ## cwd = os.getcwd()
-    ## try:
-    ##     os.chdir(opts.packagedir)
-    ## finally:
-    ##     os.chdir(cwd)
-    
-    ## config_py = '__init__.py'
-    ## pass
 
+    # Copy source files
+    if opts.copy_sources:
+        src_target = os.path.join(opts.output_dir, 'src')
+        os.mkdir(src_target)
+        for fname in opts.fortranfiles:
+            shutil.copy(fname, src_target)
 
 def update_cmd(opts):
     use_git = check_ok_to_write(opts)
@@ -440,8 +485,11 @@ def create_argument_parser():
     #
     createpkg = subparsers.add_parser('createpackage')
     createpkg.set_defaults(func=createpkg_cmd)
-    createpkg.add_argument('packagedir')
+    createpkg.add_argument('-o', '--output-dir', help='target dir for package')
+    createpkg.add_argument('--copy-sources', action='store_true', help='copy source files')
+    createpkg.add_argument('packagename')
     createpkg.add_argument('fortranfiles', metavar='fortranfile', nargs='+')
+    configuration.add_cmdline_options(createpkg.add_argument)
     
     #
     # update command
