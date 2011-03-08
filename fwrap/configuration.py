@@ -132,7 +132,7 @@ class Configuration:
             path, basename = os.path.split(pyx_filename)
             self.wrapper_path = os.path.realpath(path)
             self.wrapper_basename = basename
-            for ext in ('.pyx.in', '.pyx'):
+            for ext in ('.pyx.in', '.pyx', '.py'):
                 if basename.endswith(ext):
                     self.wrapper_name = basename[:-len(ext)]
                     break

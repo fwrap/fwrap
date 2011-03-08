@@ -101,13 +101,15 @@ def parse_modules(fsrcs, include_dirs=None):
         
     root_nodes, modules = sort_modules(blocks)
 
-    module_asts = {}
+    module_iface_trees = {}
     analyze_modules(root_nodes, modules)
     for name, module in modules.iteritems():
         iface_tree = FParserToIfaceTransform('fortran').process(module)
-        module_iface_trees[name] = ast
-    root_iface_tree = FParserToIfaceTransform('fortran').process(root_nodes)
-    return root_iface_tree, module_iface_trees
+        module_iface_trees[name] = iface_tree
+    root = FParserToIfaceTransform('fortran').process(root_nodes)
+    if len(root) > 0:
+        module_iface_trees[None] = root
+    return module_iface_trees
 
 def generate_ast(fsrcs, include_dirs=None):
     ast = []
@@ -124,6 +126,7 @@ class FParserToIfaceTransform(object):
         self.language = language
 
     def process(self, nodes):
+        self.module = None
         if self.language == 'pyf':
             return self.process_pyf(nodes)
         elif self.language == 'fortran':
@@ -160,37 +163,42 @@ class FParserToIfaceTransform(object):
         from fparser.statements import Use, Access, Contains
         from fparser.typedecl_statements import Implicit, TypeDeclarationStatement
         from fparser.block_statements import (Function, Subroutine, Interface, Module,
-                                              EndModule)
+                                              EndModule, BeginSource)
                                               
         self.language = 'fortran'
         # Assume that all use clauses come before routine definitions
-        self.module_uses = []
-        nodes = block.content
-        self.module = None
-        if isinstance(nodes[0], Module):
-            if not len(nodes) == 1:
-                raise NotImplementedError(
-                    'More than one module; please use the createpackage command')
-                # We could throw them into the same Python namespace *shrug*
-            self.module = nodes[0]
-            nodes = self.module.content
-        ast = []
-        for node in nodes:
-            if isinstance(node, Use):
-                self.module_uses.append(node.name)
-            elif isinstance(node, (Function, Subroutine)):
-                if self.module is not None and self.module.check_private(node.name):
-                    # Private proc
-                    continue
+        if isinstance(block, BeginSource):
+            if len(block.content) >= 1 and isinstance(block.content[0], Module):
+                if len(block.content) > 1:
+                    raise NotImplementedError(
+                        'Please use "fwrap createpackage" to wrap multiple modules')
+                return self.process_fortran(block.content[0].content)
+        elif isinstance(block, Module):
+            self.module_uses = []
+            self.module = block
+            res = self.process_fortran(block.content)
+            self.module = None
+            self.module_uses = []
+            return res
+        elif isinstance(block, list):
+            ast = []
+            for node in block:
+                if isinstance(node, Use):
+                    self.module_uses.append(node.name)
+                elif isinstance(node, (Function, Subroutine)):
+                    if self.module is not None and self.module.check_private(node.name):
+                        # Private proc
+                        continue
+                    else:
+                        ast.append(self._process_proc(node, None))
+                elif isinstance(node, (Implicit, TypeDeclarationStatement,
+                                       Interface, Access, Contains, EndModule)):
+                    continue # ignore
                 else:
-                    ast.append(self._process_proc(node, None))
-            elif isinstance(node, (Implicit, TypeDeclarationStatement,
-                                   Interface, Access, Contains, EndModule)):
-                continue # ignore
-            else:
-                raise NotImplementedError("Node type %r" % type(node))
-        self.module = None
-        return ast
+                    raise NotImplementedError("Node type %r" % type(node))
+            return ast
+        else:
+            assert False
     
     def _process_proc(self, proc, pyf_callback_modules):
         from fparser.statements import Use
