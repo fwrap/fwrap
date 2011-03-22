@@ -173,6 +173,10 @@ class FParserToIfaceTransform(object):
                     raise NotImplementedError(
                         'Please use "fwrap createpackage" to wrap multiple modules')
                 return self.process_fortran(block.content[0].content)
+            else:
+                self.module_uses = []
+                self.module = None
+                return self.process_fortran(block.content)
         elif isinstance(block, Module):
             self.module_uses = []
             self.module = block
