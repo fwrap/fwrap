@@ -203,7 +203,8 @@ class FwrapCompileTestCase(unittest.TestCase):
             conf_flags = self.configure_flags
             if pyf_file is not None:
                 conf_flags.append('--pyf=%s' % pyf_file)
-            argv = ['configure'] + conf_flags + ['build',
+            argv = ['configure', 'build'] + conf_flags + [
+                    '--inplace',
                     '--name=%s' % self.projname,
                     '--outdir=%s' % self.projdir]
             argv += source_files

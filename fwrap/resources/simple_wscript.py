@@ -18,6 +18,7 @@ def options(opt):
     opt.load('compiler_c')
     opt.load('compiler_fc')
     opt.load('python')
+    opt.load('inplace', tooldir='tools')
 
 def configure(conf):
 
@@ -34,15 +35,15 @@ def configure(conf):
     conf.load('python')
     conf.check_python_version((2,5))
     conf.check_python_headers()
-    conf.check_python_module('numpy')
+
+    conf.check_tool('numpy', tooldir='tools')
     conf.check_numpy_version(minver=(1,3))
-    conf.get_numpy_includes()
-
-    conf.find_program('cython', var='CYTHON')
+    conf.check_tool('cython', tooldir='tools')
     conf.check_cython_version(minver=(0,11,1))
-
     conf.find_program(['fwrap'], var='FWRAP')
-
+#    conf.check_tool('fwrapktp', tooldir='tools')
+    conf.check_tool('inplace', tooldir='tools')
+    
     conf.env['FW_PROJ_NAME'] = conf.options.name
     conf.env['FW_F77_BINDING'] = conf.options.f77binding
     conf.env['FW_DETECT_TEMPLATES'] = conf.options.detect_templates
@@ -131,77 +132,11 @@ def build(bld):
             install_path = bld.srcnode.abspath(),
             )
 
-    bld(
-        rule = 'touch ${TGT}',
-        target = '__init__.py',
-        install_path = bld.srcnode.abspath(),
-        )
-
-
-from waflib.Configure import conf
-@conf
-def check_numpy_version(conf, minver, maxver=None):
-    conf.start_msg("Checking numpy version")
-    minver = tuple(minver)
-    if maxver: maxver = tuple(maxver)
-    (np_ver_str,) = conf.get_python_variables(
-            ['numpy.version.short_version'], ['import numpy'])
-    np_ver = tuple([int(x) for x in np_ver_str.split('.')])
-    if np_ver < minver or (maxver and np_ver > maxver):
-        conf.end_msg(False)
-        conf.fatal("numpy version %s is not in the "
-                "range of supported versions: minimum=%s, maximum=%s" % (np_ver_str, minver, maxver))
-    conf.end_msg(str(np_ver))
-
-@conf
-def get_numpy_includes(conf):
-    conf.start_msg("Checking numpy includes")
-    (np_includes,) = conf.get_python_variables(
-            ['numpy.get_include()'], ['import numpy'])
-    conf.env.INCLUDES_NUMPY = np_includes
-    conf.end_msg('ok (%s)' % np_includes)
-
-@conf
-def check_cython_version(conf, minver):
-    conf.start_msg("Checking cython version")
-    minver = tuple(minver)
-    import re
-    version_re = re.compile(r'cython\s*version\s*(?P<major>\d*)\.(?P<minor>\d*)(?:\.(?P<micro>\d*))?', re.I).search
-    cmd = conf.cmd_to_list(conf.env['CYTHON'])
-    cmd = cmd + ['--version']
-    from waflib.Tools import fc_config
-    stdout, stderr = fc_config.getoutput(conf, cmd)
-    if stdout:
-        match = version_re(stdout)
-    else:
-        match = version_re(stderr)
-    if not match:
-        conf.fatal("cannot determine the Cython version")
-    cy_ver = [match.group('major'), match.group('minor')]
-    if match.group('micro'):
-        cy_ver.append(match.group('micro'))
-    else:
-        cy_ver.append('0')
-    cy_ver = tuple([int(x) for x in cy_ver])
-    if cy_ver < minver:
-        conf.end_msg(False)
-        conf.fatal("cython version %s < %s" % (cy_ver, minver))
-    conf.end_msg(str(cy_ver))
 
 import os
 from waflib import Logs, Build, Utils
 
 from waflib import TaskGen, Task
-
-TaskGen.declare_chain(
-        name = "cython",
-        rule = "${CYTHON} ${CYTHONFLAGS} ${CPPPATH_ST:INCPATHS} ${SRC} -o ${TGT}",
-        ext_in = ['.pyx'],
-        ext_out = ['.c'],
-        reentrant = True,
-        after = 'modmap',
-        )
-
 
 #
 # Typemaps

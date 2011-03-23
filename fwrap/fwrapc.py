@@ -9,13 +9,14 @@ import os, sys, shutil
 import subprocess
 from optparse import OptionParser, OptionGroup
 import fwrap.configuration
+from fwrap import waf_support
 
 PROJECT_OUTDIR = 'fwproj'
 PROJECT_NAME = PROJECT_OUTDIR
+FWRAP_PATH = os.path.abspath(os.path.dirname(__file__))
+RESOURCE_PATH = os.path.join(FWRAP_PATH, 'resources')
 
-def setup_dirs(dirname):
-    p = os.path
-    fwrap_path = p.abspath(p.dirname(__file__))
+def setup_dirs(project_name, dirname):
     # set up the project directory.
     try:
         os.mkdir(dirname)
@@ -28,21 +29,18 @@ def setup_dirs(dirname):
         pass
 
     # cp waf and wscript into the project dir.
-    fw_wscript = os.path.join(
-            fwrap_path,
-            'fwrap_wscript')
+    shutil.copy(os.path.join(RESOURCE_PATH, 'simple_wscript.py'),
+                os.path.join(dirname, 'wscript'))
 
-    shutil.copy(
-            fw_wscript,
-            os.path.join(dirname, 'wscript'))
+    os.makedirs(os.path.join(dirname, 'tools'))
+    for x in 'numpy cython fwrapktp inplace'.split():
+        shutil.copy(os.path.join(RESOURCE_PATH, 'tools', x + '.py'),
+                    os.path.join(dirname, 'tools'))
 
-    waf_path = os.path.join(
-            fwrap_path,
-            'waf')
+    shutil.copy(os.path.join(RESOURCE_PATH, 'waf'),
+                dirname)
 
-    shutil.copy(
-            waf_path,
-            dirname)
+#    waf_support.create_singlemodule_build(project_name, dirname)
 
 def wipe_out(dirname):
     # wipe out everything and start over.
@@ -53,7 +51,7 @@ def proj_dir(name):
 
 def configure_cb(opts, args, orig_args):
     wipe_out(proj_dir(opts.outdir))
-    setup_dirs(proj_dir(opts.outdir))
+    setup_dirs(opts.name, proj_dir(opts.outdir))
 
 def build_cb(opts, args, argv):
     srcs = []
@@ -118,6 +116,7 @@ def fwrapc(argv):
     configure_opts = OptionGroup(parser, "Configure Options")
     configure_opts.add_option("--name",
             help='name for the extension module [default %default]')
+    configure_opts.add_option("--inplace")
     configure_opts.add_option('--pyf',
                               help='merge in the manual changes in this pyf-file to '
                               'the wrapper')

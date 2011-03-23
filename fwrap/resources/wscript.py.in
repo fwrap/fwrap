@@ -71,5 +71,4 @@ def build(bld):
         includes = ['.', 'basic_package_fwrap'],
     )
 
-#    1/0
 # vim:ft=python
