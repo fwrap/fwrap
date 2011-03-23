@@ -183,7 +183,10 @@ def createpkg_cmd(opts):
 
     shutil.copy(os.path.join(FWRAP_PATH, 'waf'),
                 opts.output_dir)
-    
+
+    # Make __init__.py
+    with file(os.path.join(target_path, '__init__.py'), 'w') as f:
+        pass
 
     # Copy source files
     if opts.copy_sources:
