@@ -25,25 +25,18 @@ from waflib.TaskGen import after_method, before_method, feature, taskgen_method,
 # Note: Python extensions will have their install_path set twice,
 # but we use after_method to make sure the pyext setting prevails
 
-@feature('cshlib')
+@feature('cshlib', 'fcshlib')
 @before_method('propagate_uselib_vars', 'apply_link')
-def set_install_path_cshlib(self):
-    if self.env['INPLACE']:
-        self.install_path = self.bld.srcnode.make_node('lib').abspath()
-        self.rpath = '${ORIGIN}'
-
-@feature('fcshlib')
-@before_method('propagate_uselib_vars', 'apply_link')
-def set_install_path_cshlib(self):
-    if self.env['INPLACE']:
+def apply_install_path_shlib(self):
+    if self.env['INPLACE_INSTALL']:
         self.install_path = self.bld.srcnode.make_node('lib').abspath()
         self.rpath = '${ORIGIN}'
 
 @feature('pyext')
 @before_method('propagate_uselib_vars', 'apply_link')
-@after_method('set_install_path_cshlib')
-def set_install_path_pyext(self):
-    if self.env['INPLACE']:
+@after_method('apply_install_path_shlib')
+def apply_install_path_pyext(self):
+    if self.env['INPLACE_INSTALL']:
         # Scan sources for likely position of extension source
         srcpath = None
         for x in self.source:
@@ -57,6 +50,11 @@ def set_install_path_pyext(self):
         lib_path  = self.bld.srcnode.make_node('lib')
         self.rpath = os.path.join('${ORIGIN}', lib_path.path_from(srcpath))
 
+def options(self):
+    self.add_option('--inplace', action='store_true',
+                    help='"install" command installs to the project directory')
 
-def configure(conf):
-    pass
+def configure(self):
+    if self.options.inplace:
+        self.env['INPLACE_INSTALL'] = True
+

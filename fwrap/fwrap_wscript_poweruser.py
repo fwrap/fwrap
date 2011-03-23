@@ -10,6 +10,7 @@ def options(opt):
     opt.load('compiler_c')
     opt.load('compiler_fc')
     opt.load('python')
+    opt.load('inplace', tooldir='tools')
 
 def configure(conf):
     cfg = conf.path.find_resource('fwrap.config.py')
@@ -38,9 +39,6 @@ def configure(conf):
     conf.add_os_flags('LIBPATH')
     conf.add_os_flags('STLIB')
     conf.add_os_flags('STLIBPATH')
-
-def foo(task):
-    1/0
 
 def build(bld):
     y =bld(
