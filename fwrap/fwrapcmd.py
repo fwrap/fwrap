@@ -27,6 +27,7 @@ BRANCH_PREFIX = '_fwrap'
 BRANCH = '_fwrap'
 PYF_BRANCH = '_fwrap+pyf'
 FWRAP_PATH = os.path.abspath(os.path.dirname(__file__))
+RESOURCE_PATH = os.path.join(FWRAP_PATH, 'resources')
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
@@ -175,13 +176,13 @@ def createpkg_cmd(opts):
 
     # Provide build system
     os.makedirs(os.path.join(opts.output_dir, 'tools'))
-    shutil.copy(os.path.join(FWRAP_PATH, 'fwrap_wscript_poweruser.py'),
+    shutil.copy(os.path.join(RESOURCE_PATH, 'wscript.py.in'),
                 os.path.join(opts.output_dir, 'wscript'))
     for x in 'numpy cython fwrapktp inplace'.split():
-        shutil.copy(os.path.join(FWRAP_PATH, 'tools', x + '.py'),
+        shutil.copy(os.path.join(RESOURCE_PATH, 'tools', x + '.py'),
                     os.path.join(opts.output_dir, 'tools'))
 
-    shutil.copy(os.path.join(FWRAP_PATH, 'waf'),
+    shutil.copy(os.path.join(RESOURCE_PATH, 'waf'),
                 opts.output_dir)
 
     # Make __init__.py

@@ -3,7 +3,7 @@ doc/sphinxdocs/build
 BUILD/*
 fwrap/fparser
 fwrap.log
-fwrap/waf
+fwrap/resources/waf
 *~
 fparser.log
 *.pye
