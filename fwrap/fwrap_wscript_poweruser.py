@@ -41,47 +41,35 @@ def configure(conf):
     conf.add_os_flags('STLIBPATH')
 
 def build(bld):
-    y =bld(
-        name='wrapperbld',
-        features = 'c pyext cshlib',
-        source = (bld.srcnode.ant_glob(incl=['basic_package_fwrap/*.pyx'])),
-#        typemap = 'basic_package_fwrap/fwrap_type_specs.in',
-#        wrapper = 
-#        typemap = 'fwrap_type_specs.in',
-        target = 'basic_package_fwrap',
-        use = 'fcshlib CLIB NUMPY myfortranlib',
-        includes = ['.', 'basic_package_fwrap'],
-        install_path = bld.srcnode.abspath(),
-#        after = 'typemap'
-    )
 
-    x = bld.process_typemap(
-#        rule=foo,
-        name='typemap',
-        source = ['basic_package_fwrap/fwrap_type_specs.in'],
-        target = [
-             'basic_package_fwrap/fwrap_ktp_mod.f90',
-             'basic_package_fwrap/fwrap_ktp_header.h',
-             'basic_package_fwrap/fwrap_ktp.pxd',
-             'basic_package_fwrap/fwrap_ktp.pxi'],
-#        before='wrapperbld'
-         )
-    x.set_after(y)
+    bld(features='fwrapktp',
+        type_spec='fwrap_type_specs.in',
+        includes=['.']
+        )
+    
+
     bld(
         features = 'fc fcshlib',
         source = bld.srcnode.ant_glob(incl=['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']),
         target = 'myfortranlib',
-#        use = 'fcshlib',
         includes = ['.', 'basic_package_fwrap'],
-        install_path = bld.srcnode.abspath(),
     )
 
+    bld(
+        features = 'c fc pyext cshlib fcshlib',
+        source = ['basic_package_fwrap/barmod.pyx', 'basic_package_fwrap/barmod_fc.f90'],
+        target = 'basic_package_fwrap/barmod',
+        use = 'CLIB NUMPY myfortranlib',
+        includes = ['.', 'basic_package_fwrap'],
+    )
 
     bld(
-        rule = 'touch ${TGT}',
-        target = '__init__.py',
-        install_path = bld.srcnode.abspath(),
-        )
+        features = 'c fc pyext cshlib fcshlib',
+        source = ['basic_package_fwrap/foomod.pyx', 'basic_package_fwrap/foomod_fc.f90'],
+        target = 'basic_package_fwrap/foomod',
+        use = 'CLIB NUMPY myfortranlib',
+        includes = ['.', 'basic_package_fwrap'],
+    )
 
-
+#    1/0
 # vim:ft=python

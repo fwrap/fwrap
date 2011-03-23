@@ -7,18 +7,62 @@ from waflib import Logs, Build, Utils
 #from waflib.Task import Task
 from waflib import TaskGen, Task
 from waflib.TaskGen import after_method, before_method, feature, taskgen_method, extension
-
+import os
 
 gc = None
 
-TaskGen.declare_chain(
-        name = "cython",
-        rule = "${CYTHON} ${CYTHONFLAGS} ${CPPPATH_ST:INCPATHS} ${SRC} -o ${TGT}",
-        ext_in = ['.in'],
-        ext_out = ['.c'],
-        reentrant = True,
-        )
+@TaskGen.feature('fwrapktp')
+@TaskGen.after('process_source')
+@TaskGen.before('apply_link')
+def generate_fwrap_ktp_headers(self):
+    node = self.path.find_or_declare(getattr(self, 'typemap', generate_fwrap_ktp.typemap_in))
 
+    typemap_f90 = self.path.find_or_declare(generate_fwrap_ktp.typemap_f90)
+    typemap_h = self.path.find_or_declare(generate_fwrap_ktp.typemap_h)
+    typemap_pxd = self.path.find_or_declare(generate_fwrap_ktp.typemap_pxd)
+    typemap_pxi = self.path.find_or_declare(generate_fwrap_ktp.typemap_pxi)
+
+    inputs = [node]
+    outputs = [typemap_f90, typemap_h, typemap_pxd, typemap_pxi]
+
+    gen_task = self.create_task("generate_fwrap_ktp", inputs, outputs)
+
+    fc_task = self.create_compiled_task('fc', typemap_f90)
+    self.includes_nodes = [] # *shrug*
+    fc_task.nomod = True # the fortran files won't compile unless all the .mod files are set, ick
+
+    
+class generate_fwrap_ktp(Task.Task):
+    before = ['c', 'fc', 'cython']
+    
+    typemap_in = 'fwrap_type_specs.in'
+    typemap_f90 = 'fwrap_ktp_mod.f90'
+    typemap_h = 'fwrap_ktp_header.h'
+    typemap_pxd = 'fwrap_ktp.pxd'
+    typemap_pxi = 'fwrap_ktp.pxi'
+
+    def run(self):
+        obld = self.generator.bld
+        bld = Build.BuildContext(top_dir=obld.srcnode.abspath(), out_dir=obld.bldnode.abspath())
+        bld.init_dirs()
+        bld.in_msg = 1 # disable all that comes from bld.msg(..), bld.start_msg(..) and bld.end_msg(...)
+        bld.env = self.env.derive()
+        ktp_in, = self.inputs
+        bld.logger = Logs.make_logger(bld.bldnode.abspath() + os.sep + ktp_in.name + '.log', 'build')
+
+        ctps = gc.read_type_spec(ktp_in.abspath())
+        find_types(bld, ctps)
+
+        typemap_f90, typemap_h, typemap_pxd, typemap_pxi = self.outputs
+
+        def genfile(generator, node, *args):
+            generator(ctps, node, *args)
+
+        genfile(gc.write_f_mod, typemap_f90)
+        genfile(gc.write_header, typemap_h)
+        genfile(gc.write_pxd, typemap_pxd, self.typemap_h)
+        genfile(gc.write_pxi, typemap_pxi)
+        
 
 def configure(conf):
     # TODO: Get rid of this dependency
@@ -30,40 +74,6 @@ def process_typemap(self, **kw):
     return self(rule=_process_typemap_builder, **kw)
 Build.BuildContext.process_typemap = process_typemap
 
-def _process_typemap_builder(self):
-    # we need another build context, because we cannot really disable the logger here
-    import time
-    time.sleep(4)
-    1/0
-    obld = self.generator.bld
-    bld = Build.BuildContext(top_dir=obld.srcnode.abspath(), out_dir=obld.bldnode.abspath())
-    bld.init_dirs()
-    bld.in_msg = 1 # disable all that comes from bld.msg(..), bld.start_msg(..) and bld.end_msg(...)
-    bld.env = self.env.derive()
-    node = self.inputs[0]
-    bld.logger = Logs.make_logger(node.parent.get_bld().abspath() + os.sep + node.name + '.log', 'build')
-
-    ktp_in = [ip for ip in self.inputs if ip.name.endswith('.in')][0]
-    ctps = gc.read_type_spec(ktp_in.abspath())
-    find_types(bld, ctps)
-    gen_type_map_files(ctps, self.outputs, write_f90_mod=True,
-                       write_pxi=True)
-        
-def gen_type_map_files(ctps, outputs, write_f90_mod, write_pxi):
-    def find_by_ext(lst, ext):
-        newlst = [x for x in lst if x.name.endswith(ext)]
-        if len(newlst) != 1:
-            return
-        return newlst[0]
-
-    header_name = find_by_ext(outputs, '.h').name
-    if write_f90_mod:
-        gc.write_f_mod(ctps, find_by_ext(outputs, '.f90'))
-    gc.write_header(ctps, find_by_ext(outputs, '.h'))
-    gc.write_pxd(ctps, find_by_ext(outputs, '.pxd'), header_name)
-    if write_pxi:
-        gc.write_pxi(ctps, find_by_ext(outputs, '.pxi'))
-    print find_by_ext(outputs, '.pxi')
 
 def find_types(bld, ctps):
     for ctp in ctps:

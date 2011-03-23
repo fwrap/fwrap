@@ -192,7 +192,9 @@ class FwrapCompileTestCase(unittest.TestCase):
             cwd = os.getcwd()
             try:
                 os.chdir(self.projdir)
-                check_call([py_exe, 'waf', 'configure', 'build', '-v', 'install'])
+                check_call([py_exe, 'waf',
+                            'configure', '--inplace',
+                            'build', 'install'])
             finally:
                 os.chdir(cwd)
         else:
