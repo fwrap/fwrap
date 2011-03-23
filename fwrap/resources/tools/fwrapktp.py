@@ -169,7 +169,7 @@ int main(int argc, char **argv)
                     fragment=cfrag,
                     features = 'c',
                     compile_filename='test.c',
-                    use='NUMPY pyext')
+                    use='NUMPY PYEXT')
         except bld.errors.ConfigurationError:
             pass
         else:
