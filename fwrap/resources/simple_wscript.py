@@ -102,7 +102,6 @@ def build(bld):
             target = bld.env['FW_PROJ_NAME'],
             use = 'fcshlib CLIB NUMPY',
             includes = ['.'],
-            install_path = bld.srcnode.abspath(),
             )
     else:
         bld(

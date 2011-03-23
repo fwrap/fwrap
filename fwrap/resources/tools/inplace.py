@@ -22,42 +22,31 @@ import os
 from waflib.Configure import conf
 from waflib.TaskGen import after_method, before_method, feature, taskgen_method, extension
 
-def _find_extension_dir_node(sources):
-    srcpath = None
-    for x in sources:
-        if x.is_src() and (x.name.endswith('.pyx') or x.name.endswith('.c')):
-            srcpath = x.parent
-    return srcpath
-
 @feature('cshlib', 'fcshlib', 'pyext')
+@after_method('process_source')
 @before_method('propagate_uselib_vars', 'apply_link', 'init_pyext')
 def apply_inplace_install_path(self):
     if self.env['INPLACE_INSTALL'] and not getattr(self, 'install_path', None):
         if 'pyext' in self.features:
             # Scan sources for likely position of extension source
-            srcpath = _find_extension_dir_node(self.source)
-            if srcpath is None:
-                print self.source
-                print AssertionError("Python extension does not have an associated C file...")
-                return
-            self.install_path = os.path.join(self.bld.srcnode.abspath(), srcpath.srcpath())
+            # For now, just take Cython source -- not sure how to deal with C extensions
+            # which can have multiple C suffixes
+            package_node = None
+            for x in self.source:
+                if x.suffix() == '.pyx':
+                    package_node = x.parent
+                    break
+            else:
+                raise AssertionError("Python extension does not have an associated .pyx file")
+            self.install_path = package_node.get_src().abspath()
+            
+            lib_path  = self.bld.srcnode.make_node('lib')
+            if not getattr(self, 'rpath', None):
+                self.rpath = os.path.join('${ORIGIN}', lib_path.path_from(package_node))
         else:
             self.install_path = self.bld.srcnode.make_node('lib').abspath()
-
-@feature('cshlib', 'fcshlib', 'pyext')
-@before_method('propagate_uselib_vars', 'apply_link', 'init_pyext')
-def apply_inplace_rpath(self):
-    if self.env['INPLACE_INSTALL'] and not getattr(self, 'rpath', None):
-        if 'pyext' in self.features:
-            srcpath = _find_extension_dir_node(self.source)
-            if srcpath is None:
-                print self.source
-                print AssertionError("Python extension does not have an associated C file...")
-                return
-            lib_path  = self.bld.srcnode.make_node('lib')
-            self.rpath = os.path.join('${ORIGIN}', lib_path.path_from(srcpath))
-        else:
-            self.rpath = '${ORIGIN}'
+            if not getattr(self, 'rpath', None):
+                self.rpath = '${ORIGIN}'
 
 def options(self):
     self.add_option('--inplace', action='store_true',
