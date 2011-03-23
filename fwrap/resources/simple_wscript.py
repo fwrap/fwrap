@@ -40,10 +40,10 @@ def configure(conf):
     conf.check_numpy_version(minver=(1,3))
     conf.check_tool('cython', tooldir='tools')
     conf.check_cython_version(minver=(0,11,1))
-    conf.find_program(['fwrap'], var='FWRAP')
-#    conf.check_tool('fwrapktp', tooldir='tools')
+    conf.check_tool('fwraptool', tooldir='tools')
+    conf.check_tool('fwrapktp', tooldir='tools')
     conf.check_tool('inplace', tooldir='tools')
-    
+     
     conf.env['FW_PROJ_NAME'] = conf.options.name
     conf.env['FW_F77_BINDING'] = conf.options.f77binding
     conf.env['FW_DETECT_TEMPLATES'] = conf.options.detect_templates
@@ -86,15 +86,7 @@ def build(bld):
     flags.extend('--template=%s' % x for x in bld.env['FW_TEMPLATE'])
     if bld.env['FW_PYF']:
         flags.append('--pyf=%s' % bld.env['FW_PYF'])
-
-    bld(
-        name = 'fwrap',
-        rule = '${PYTHON} ${FWRAP} create ${FWRAP_OPTS} %s %s.pyx ${SRC}' % (
-            ' '.join(flags), bld.env['FW_PROJ_NAME']),
-        source = bld.srcnode.ant_glob(incl=['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']),
-        target = target
-        )
-
+        
     if detect_templates:
         bld(
             name = 'tempita',
@@ -105,11 +97,8 @@ def build(bld):
 
     if not want_f77:
         bld(
-            features = 'c fc typemap pyext cshlib',
-            source = bld.srcnode.ant_glob(incl=['src/*.f', 'src/*.F', 'src/*.f90', 'src/*.F90']) +
-                     [cy_src],
-            wrapper = wrapper,
-            typemap = 'fwrap_type_specs.in',
+            features = 'c fc pyext fwrap cshlib',
+            source = bld.srcnode.ant_glob(incl=['*.f', '*.F', '*.f90', '*.F90']),
             target = bld.env['FW_PROJ_NAME'],
             use = 'fcshlib CLIB NUMPY',
             includes = ['.'],
@@ -198,6 +187,8 @@ class modmap(Task.Task):
         """
         we need another build context, because we cannot really disable the logger here
         """
+        from fwrap import gen_config as gc
+
         obld = self.generator.bld
         bld = Build.BuildContext(top_dir=obld.srcnode.abspath(), out_dir=obld.bldnode.abspath())
         bld.init_dirs()
@@ -212,9 +203,9 @@ class modmap(Task.Task):
         gen_type_map_files(ctps, self.outputs, write_f90_mod=True,
                            write_pxi=True)
 
-from fwrap import gen_config as gc
-
 def gen_type_map_files(ctps, outputs, write_f90_mod, write_pxi):
+    from fwrap import gen_config as gc
+
     def find_by_ext(lst, ext):
         newlst = [x for x in lst if x.name.endswith(ext)]
         if len(newlst) != 1:
@@ -245,6 +236,8 @@ def find_types(bld, ctps):
 
 fc_type_memo = {}
 def find_fc_type(bld, basetype, decl, possible_modules):
+    from fwrap import gen_config as gc
+
     res = fc_type_memo.get((basetype, decl), None)
     if res is not None:
         return res
