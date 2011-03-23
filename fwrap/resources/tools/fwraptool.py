@@ -13,6 +13,11 @@ def fwrap_fortran_sources(self):
                 raise ValueError('fwrap feature only works with a single Fortran source')
             f90_wrapped = True
 
+            # Automatically set target name if not provided
+            name = node.name[:-len(node.suffix())]
+            if not getattr(self, 'target', None):
+                self.target = name
+
             self.env['INPLACE_INSTALL_PATH'] = node.srcpath()
             pyx = node.change_ext('_fwrap.pyx')
             fc_f90 = node.change_ext('_fwrap_fc.f90')
