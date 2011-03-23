@@ -1,7 +1,7 @@
 Fwrap
 =====
 
-Copyright (c) 2010, Kurt W. Smith
+Copyright (c) 2011, Kurt W. Smith & Dag Sverre Seljebotn
 
 All rights reserved.
 
