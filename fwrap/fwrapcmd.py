@@ -170,13 +170,14 @@ def createpkg_cmd(opts):
         for proc in fc_ast:
             dtypes.update(proc.all_dtypes())
     ctps = gen_config.ctps_from_dtypes(list(dtypes))
-    put(gen_config.pickle_type_specs(ctps), TYPE_SPECS_SRC)
+    buf = gen_config.pickle_type_specs(ctps)
+    fwrapper.write_to_dir(opts.output_dir, TYPE_SPECS_SRC, buf)
 
     # Provide build system
     os.makedirs(os.path.join(opts.output_dir, 'tools'))
     shutil.copy(os.path.join(FWRAP_PATH, 'fwrap_wscript_poweruser.py'),
                 os.path.join(opts.output_dir, 'wscript'))
-    for x in 'numpy cython fwrapktp'.split():
+    for x in 'numpy cython fwrapktp inplace'.split():
         shutil.copy(os.path.join(FWRAP_PATH, 'tools', x + '.py'),
                     os.path.join(opts.output_dir, 'tools'))
 

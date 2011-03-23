@@ -31,6 +31,7 @@ def configure(conf):
     conf.check_tool('cython', tooldir='tools')
     conf.check_cython_version(minver=(0,11,1))
     conf.check_tool('fwrapktp', tooldir='tools')
+    conf.check_tool('inplace', tooldir='tools')
 
     conf.add_os_flags('INCLUDES')
     conf.add_os_flags('LIB')
