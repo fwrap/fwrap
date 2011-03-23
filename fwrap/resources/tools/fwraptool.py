@@ -18,7 +18,6 @@ def fwrap_fortran_sources(self):
             if not getattr(self, 'target', None):
                 self.target = name
 
-            self.env['INPLACE_INSTALL_PATH'] = node.srcpath()
             pyx = node.change_ext('_fwrap.pyx')
             fc_f90 = node.change_ext('_fwrap_fc.f90')
             ktp = node.parent.find_or_declare('fwrap_type_specs.in')
