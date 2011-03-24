@@ -33,7 +33,7 @@ def setup_dirs(project_name, dirname):
                 os.path.join(dirname, 'wscript'))
 
     os.makedirs(os.path.join(dirname, 'tools'))
-    for x in 'numpy cython fwrapktp inplace'.split():
+    for x in 'numpy cython fwraptool fwrapktp inplace'.split():
         shutil.copy(os.path.join(RESOURCE_PATH, 'tools', x + '.py'),
                     os.path.join(dirname, 'tools'))
 
