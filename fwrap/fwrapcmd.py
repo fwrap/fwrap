@@ -115,6 +115,14 @@ def create_cmd(opts):
         execproc(['gcc', '-E', '-P', '-o', tmp, x])
         return tmp
 
+    if cfg.f77binding:
+        import f77_config
+        import gen_config
+        from fwrap.constants import TYPE_SPECS_SRC
+        ctps = f77_config.get_f77_ctps()
+        buf = gen_config.pickle_type_specs(ctps)
+        fwrapper.write_to_dir(pyxdir, TYPE_SPECS_SRC, buf)
+
     include_dirs = set()
     try:
         fortran_files = [preprocess(x) for x in opts.fortranfiles]

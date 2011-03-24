@@ -301,9 +301,9 @@ class FParserToIfaceTransform(object):
 
         if p_arg.is_external():
             if self.language == 'pyf':
-                return pyf_callback_arg(p_arg, pyf_use)
+                return self.pyf_callback_arg(p_arg, pyf_use)
             else:
-                return callback_arg(p_arg)
+                return self.callback_arg(p_arg)
 
         p_typedecl = p_arg.get_typedecl()
         dtype = self._get_dtype(p_typedecl)
@@ -356,117 +356,117 @@ class FParserToIfaceTransform(object):
     def _get_current_modules(self):
         return set(self.module_uses) | set(self.proc_uses)
 
+    def _get_callback_proc(self, parent_proc, p_arg, proc_name, arg_lst, is_function):
+        from fort_expr import parse, ExpressionType, NameNode
+        if isinstance(arg_lst, list):
+            arg_lst = ', '.join(arg_lst)
+        proc_call = '%s(%s)' % (proc_name, arg_lst)
+        proc_ref = parse(proc_call)
+        args = proc_ref.arg_spec_list
+        type_ctx = {}
+        bounds = {}
+        for vname in parent_proc.a.variables:
+            if vname == proc_name:
+                continue
+            v = parent_proc.a.variables[vname]
+            bounds[vname] = v.bounds
+            type_ctx[vname] = v.get_typedecl()
+        type_visitor = ExpressionType(type_ctx)
+
+        kw = {}
+        cb_args = []
+        arg_dtypes = []
+        arg_dims = []
+        arg_names = []
+        for idx, arg in enumerate(args):
+            if isinstance(arg.arg, fort_expr.EmptyNode):
+                continue
+            typespec = type_visitor.visit(arg)
+            if typespec is None:
+                arg_dt = pyf.default_real # Horrible fallback...
+            else:
+                arg_dt = self._get_dtype(typespec)
+            if isinstance(arg.arg, NameNode) and arg.arg.name in type_ctx:
+                # If call argument is a simple name node, we record the
+                # name to make manual modification of wrapper a bit easier.
+                # Also, record array bound information.
+                name = arg.arg.name
+                bound = bounds[name]
+                dimspec = None if bound is None else pyf.Dimension(bound)
+            else:
+                dimspec = None
+                name = 'arg%d' % idx
+            cb_args.append(pyf.Argument(name=name, dtype=arg_dt, dimension=dimspec))
+
+        kw.update(name=p_arg.name,
+                  args=cb_args,
+                  params=[],
+                  language='fortran')
+        if is_function:
+            assert False, 'not implemented yet'
+            kw.update()# ret_arg
+        else:
+            cls = pyf.Subroutine
+
+        return cls(**kw)
+
+    def callback_arg(self, p_arg):
+        parent_proc = None
+        for p in reversed(p_arg.parents):
+            try:
+                bt = p.blocktype
+            except AttributeError:
+                continue
+            if bt in ('subroutine', 'function'):
+                parent_proc = p
+
+        # Subroutine call -- test for 'designator' attribute
+        for stmt in parent_proc.content:
+            try:
+                cb_name = stmt.designator
+            except AttributeError:
+                pass
+            else:
+                if cb_name == p_arg.name:
+                    cbproc = self._get_callback_proc(parent_proc, p_arg, cb_name, stmt.items,
+                                                     is_function=False)
+                    return pyf.Argument(name=p_arg.name,
+                                        callback_procedure=cbproc,
+                                        dtype=pyf.CallbackType(),
+                                        intent='in')
+
+        # Function call -- find where in procedure body func is called
+        func_call_matcher = re.compile(r'\b%s\s*\(' % p_arg.name).search
+        for stmt in parent_proc.content:
+            if isinstance(stmt, typedecl_statements.TypeDeclarationStatement):
+                continue
+            source_line = stmt.item.get_line()
+            if func_call_matcher(source_line):
+                assert len(stmt.item.strlinemap) == 1
+                cb_name = p_arg.name
+                arg_lst = stmt.item.strlinemap.values()[0]
+                cbproc = self._get_callback_proc(parent_proc, p_arg, cb_name, arg_lst,
+                                                 is_function=True)
+                return pyf.Argument(name=p_arg.name, dtype=pyf.CallbackType(),
+                                    callback_procedure=cbproc,
+                                    intent='in')
+
+        # Probably passed on to another function. Horrible fallback,
+        # but useful when later merging in pyf information.
+        cbproc = pyf.Subroutine(name=p_arg.name,
+                                args=[],
+                                params=[],
+                                language='fortran')
+
+        return pyf.Argument(name=p_arg.name, dtype=pyf.CallbackType(),
+                            callback_procedure=cbproc)
+
 
 def is_proc(proc):
     return proc.blocktype in ('subroutine', 'function')
 
-
-def callback_arg(p_arg):
-    parent_proc = None
-    for p in reversed(p_arg.parents):
-        try:
-            bt = p.blocktype
-        except AttributeError:
-            continue
-        if bt in ('subroutine', 'function'):
-            parent_proc = p
-
-    # Subroutine call -- test for 'designator' attribute
-    for stmt in parent_proc.content:
-        try:
-            cb_name = stmt.designator
-        except AttributeError:
-            pass
-        else:
-            if cb_name == p_arg.name:
-                cbproc = _get_callback_proc(parent_proc, p_arg, cb_name, stmt.items,
-                                            is_function=False)
-                return pyf.Argument(name=p_arg.name,
-                                    callback_procedure=cbproc,
-                                    dtype=pyf.CallbackType(),
-                                    intent='in')
-
-    # Function call -- find where in procedure body func is called
-    func_call_matcher = re.compile(r'\b%s\s*\(' % p_arg.name).search
-    for stmt in parent_proc.content:
-        if isinstance(stmt, typedecl_statements.TypeDeclarationStatement):
-            continue
-        source_line = stmt.item.get_line()
-        if func_call_matcher(source_line):
-            assert len(stmt.item.strlinemap) == 1
-            cb_name = p_arg.name
-            arg_lst = stmt.item.strlinemap.values()[0]
-            cbproc = _get_callback_proc(parent_proc, p_arg, cb_name, arg_lst,
-                                        is_function=True)
-            return pyf.Argument(name=p_arg.name, dtype=pyf.CallbackType(),
-                                callback_procedure=cbproc,
-                                intent='in')
-
-    # Probably passed on to another function. Horrible fallback,
-    # but useful when later merging in pyf information.
-    cbproc = pyf.Subroutine(name=p_arg.name,
-                            args=[],
-                            params=[],
-                            language='fortran')
-
-    return pyf.Argument(name=p_arg.name, dtype=pyf.CallbackType(),
-                        callback_procedure=cbproc)
     
 
-def _get_callback_proc(parent_proc, p_arg, proc_name, arg_lst, is_function):
-    from fort_expr import parse, ExpressionType, NameNode
-    if isinstance(arg_lst, list):
-        arg_lst = ', '.join(arg_lst)
-    proc_call = '%s(%s)' % (proc_name, arg_lst)
-    proc_ref = parse(proc_call)
-    args = proc_ref.arg_spec_list
-    type_ctx = {}
-    bounds = {}
-    for vname in parent_proc.a.variables:
-        if vname == proc_name:
-            continue
-        v = parent_proc.a.variables[vname]
-        bounds[vname] = v.bounds
-        type_ctx[vname] = v.get_typedecl()
-    type_visitor = ExpressionType(type_ctx)
-
-    kw = {}
-    cb_args = []
-    arg_dtypes = []
-    arg_dims = []
-    arg_names = []
-    for idx, arg in enumerate(args):
-        if isinstance(arg.arg, fort_expr.EmptyNode):
-            continue
-        typespec = type_visitor.visit(arg)
-        if typespec is None:
-            arg_dt = pyf.default_real # Horrible fallback...
-        else:
-            arg_dt = _get_dtype(typespec, 'fortran')
-        if isinstance(arg.arg, NameNode) and arg.arg.name in type_ctx:
-            # If call argument is a simple name node, we record the
-            # name to make manual modification of wrapper a bit easier.
-            # Also, record array bound information.
-            name = arg.arg.name
-            bound = bounds[name]
-            dimspec = None if bound is None else pyf.Dimension(bound)
-        else:
-            dimspec = None
-            name = 'arg%d' % idx
-        cb_args.append(pyf.Argument(name=name, dtype=arg_dt, dimension=dimspec))
-        
-    kw.update(name=p_arg.name,
-              args=cb_args,
-              params=[],
-              language='fortran')
-    if is_function:
-        assert False, 'not implemented yet'
-        kw.update()# ret_arg
-    else:
-        cls = pyf.Subroutine
-        
-    return cls(**kw)
-        
 def _get_pyf_proc_annotations(proc):
     from fparser.statements import Intent, CallStatement, FortranName
     pyf_wraps_c = False

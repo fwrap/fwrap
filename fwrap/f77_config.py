@@ -72,7 +72,7 @@ def get_f77_ctps():
     ctps = []
     for name, subtypes in f77_type_table:
         for length, kind, fc_type in subtypes:
-            dtype = create_dtype(name, length=length, kind=None)
+            dtype = create_dtype(name, length=length, kind=None, possible_modules=[])
             ctp = gc.ctp_from_dtype(dtype)
             ctp.fc_type = fc_type
             ctps.append(ctp)
@@ -81,7 +81,7 @@ def get_f77_ctps():
             # f77binding mode during development. TODO: Consider
             # disabling this or implement build time detection.
             if kind is not None:
-                dtype = create_dtype(name, length=None, kind=kind)
+                dtype = create_dtype(name, length=None, kind=kind, possible_modules=[])
                 ctp = gc.ctp_from_dtype(dtype)
                 ctp.fc_type = fc_type
                 ctps.append(ctp)
