@@ -63,7 +63,7 @@ def build_cb(opts, args, argv):
     if opts.pyf:
         srcs.append(os.path.abspath(opts.pyf))
 
-    dst = os.path.join(proj_dir(opts.outdir), 'src')
+    dst = opts.outdir
     for src in srcs:
         shutil.copy(src, dst)
 

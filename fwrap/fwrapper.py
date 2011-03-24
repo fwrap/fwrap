@@ -137,7 +137,7 @@ def generate(fort_ast, name, cfg, output_directory=None,
         generators.append((generate_type_specs, (c_ast,name), constants.TYPE_SPECS_SRC))
         generators.append((generate_fc_h, (c_ast, name, cfg), FC_HDR_TMPL % name))
         generators.append((generate_fc_pxd,(c_ast, name), FC_PXD_TMPL % name))
-    if cfg.f77binding:
+    elif cfg.f77binding:
         generators.append((generate_f77_h, (fort_ast, name, cfg), FC_HDR_TMPL % name))
         generators.append((generate_f77_pxd, (fort_ast, name, cfg), FC_PXD_TMPL % name))
 

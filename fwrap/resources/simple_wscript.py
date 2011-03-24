@@ -50,7 +50,7 @@ def configure(conf):
     conf.env['FW_TEMPLATE'] = conf.options.template
     conf.env['FW_EMULATE_F2PY'] = conf.options.emulate_f2py
     conf.env['FW_NO_CPDEF'] = conf.options.no_cpdef
-    conf.env['FWRAP_OPTS'] = ''
+#    conf.env['FWRAP_OPTS'] = ''
     conf.env['FW_PYF'] = conf.options.pyf
 
     conf.add_os_flags('INCLUDES')
@@ -58,6 +58,7 @@ def configure(conf):
     conf.add_os_flags('LIBPATH')
     conf.add_os_flags('STLIB')
     conf.add_os_flags('STLIBPATH')
+    conf.add_os_flags('FWRAPFLAGS')
 
 def build(bld):
     want_f77 = bld.env['FW_F77_BINDING']

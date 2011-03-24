@@ -203,13 +203,17 @@ class FwrapCompileTestCase(unittest.TestCase):
             conf_flags = self.configure_flags
             if pyf_file is not None:
                 conf_flags.append('--pyf=%s' % pyf_file)
-            argv = ['configure', 'build'] + conf_flags + [
-                    '--inplace',
-                    '--name=%s' % self.projname,
-                    '--outdir=%s' % self.projdir]
-            argv += source_files
-            argv += ['install']
-            fwrapc(argv=argv)
+            try:
+                os.environ['FWRAPFLAGS'] = ' '.join(conf_flags)
+                argv = ['configure', 'build',
+                       '--inplace',
+                       '--name=%s' % self.projname,
+                       '--outdir=%s' % self.projdir]
+                argv += source_files
+                argv += ['install']
+                fwrapc(argv=argv)
+            finally:
+                del os.environ['FWRAPFLAGS']
 
     def compile_f2py(self, source_files, pyf_file):
         from numpy.f2py.f2py2e import main as f2pymain

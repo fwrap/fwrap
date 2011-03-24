@@ -95,7 +95,8 @@ def parse_fortran_files(opts, cfg):
     return f_ast
 
 def create_cmd(opts):
-    check_in_directory_of(opts.wrapper_pyx)    
+    pyxdir, _ = os.path.split(os.path.realpath(opts.wrapper_pyx))
+    
     cfg = Configuration(opts.wrapper_pyx, cmdline_options=opts)
     cfg.update_version()
     # Add wrapped files to configurtion
@@ -119,7 +120,7 @@ def create_cmd(opts):
         fortran_files = [preprocess(x) for x in opts.fortranfiles]
         # Create wrapper
         fwrapper.wrap(fortran_files, cfg.wrapper_name, cfg,
-                      pyf_to_merge=opts.pyf)
+                      pyf_to_merge=opts.pyf, output_directory=pyxdir)
     finally:
         for t in temporaries:
             if os.path.exists(t):
@@ -358,6 +359,9 @@ def genktp_cmd(opts):
 
     ctps = get_f77_ctps()
 
+    if opts.output_directory is not None:
+        os.chdir(opts.output_directory)
+
     for func, filename, args in [
         (gc.write_header, typemap_h, ()),
         (gc.write_pxd, typemap_pxd, (typemap_h,)),
@@ -545,6 +549,7 @@ def create_argument_parser():
     #
     genktp = subparsers.add_parser('genktp')
     genktp.set_defaults(func=genktp_cmd)
+    genktp.add_argument('--output-directory')
     configuration.add_cmdline_options(genktp.add_argument)
 
     return parser
@@ -556,7 +561,6 @@ def fwrap_main(args):
         if (not opts.wrapper_pyx.endswith('.pyx') and
             not opts.wrapper_pyx.endswith('.pyx.in')):
             raise ValueError('Cython wrapper file name must end in .pyx or .pyx.in')
-        check_in_directory_of(opts.wrapper_pyx)
         opts.wrapper_pyx = os.path.basename(opts.wrapper_pyx)
 
     return opts.func(opts)
