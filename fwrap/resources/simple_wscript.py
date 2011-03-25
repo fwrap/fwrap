@@ -26,6 +26,15 @@ def configure(conf):
     if cfg:
         conf.env.load(cfg.abspath())
 
+    conf.add_os_flags('PYTHON')
+    conf.add_os_flags('FWRAP')
+    conf.add_os_flags('INCLUDES')
+    conf.add_os_flags('LIB')
+    conf.add_os_flags('LIBPATH')
+    conf.add_os_flags('STLIB')
+    conf.add_os_flags('STLIBPATH')
+    conf.add_os_flags('FWRAPFLAGS')
+
     conf.load('compiler_c')
     conf.load('compiler_fc')
     conf.check_fortran()
@@ -43,13 +52,6 @@ def configure(conf):
     conf.check_tool('fwraptool', tooldir='tools')
     conf.check_tool('fwrapktp', tooldir='tools')
     conf.check_tool('inplace', tooldir='tools')
-     
-    conf.add_os_flags('INCLUDES')
-    conf.add_os_flags('LIB')
-    conf.add_os_flags('LIBPATH')
-    conf.add_os_flags('STLIB')
-    conf.add_os_flags('STLIBPATH')
-    conf.add_os_flags('FWRAPFLAGS')
 
 def build(bld):
 

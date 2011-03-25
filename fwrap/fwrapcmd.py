@@ -14,6 +14,7 @@ import tempfile
 import shutil
 import re
 import cPickle
+import subprocess
 from warnings import warn
 from textwrap import dedent
 from fwrap import fwrapper
@@ -93,6 +94,68 @@ def parse_fortran_files(opts, cfg):
         with file(opts.store_f_ast, 'w') as f:
             cPickle.dump(f_ast, f, protocol=2)
     return f_ast
+
+def init_cmd(opts):
+    if opts.builddir is None:
+        opts.builddir = '.'
+    dirname = opts.builddir
+    try:
+        os.mkdir(dirname)
+    except OSError:
+        pass
+    # cp waf and wscript into the project dir.
+    shutil.copy(os.path.join(RESOURCE_PATH, 'simple_wscript.py'),
+                os.path.join(dirname, 'wscript'))
+    os.makedirs(os.path.join(dirname, 'tools'))
+    for x in 'numpy cython fwraptool fwrapktp inplace'.split():
+        shutil.copy(os.path.join(RESOURCE_PATH, 'tools', x + '.py'),
+                    os.path.join(dirname, 'tools'))
+    shutil.copy(os.path.join(RESOURCE_PATH, 'waf'),
+                dirname)
+    
+
+def compile_cmd(opts):
+    from glob import glob
+    if len(opts.fortranfiles) > 1:
+        raise ValueError('More than one fortran file not currently supported')
+    if opts.output is None:
+        opts.output, _ = os.path.splitext(opts.fortranfiles[0])
+    # Create temporary directory
+    if opts.builddir is None:
+        opts.builddir = tempfile.mkdtemp(prefix='fwrap-compile-')
+    else:
+        if os.path.exists(opts.builddir):
+            raise ValueError('%s already exists' % opts.builddir)
+        os.mkdir(opts.builddir)
+    try:
+        # Call 'fwrap init' to install build system
+        init_cmd(opts)
+        # Copy Fortran sources
+        for fortranfile in opts.fortranfiles:
+            shutil.copy(fortranfile, opts.builddir)
+        # Ensure that the build calls back to the
+        # same fwrap that we are currently executing
+        os.environ['PYTHON'] = sys.executable
+        os.environ['FWRAP'] = os.path.realpath(__file__)
+        with working_directory(opts.builddir):
+            py_exe = sys.executable
+            cmd = [py_exe, 'waf', 'configure', 'build']
+            subprocess.check_call(cmd)
+            shared_libs = glob('build/*.so') + glob('build/*.pyd')
+        if len(shared_libs) != 1:
+            raise ValueError('Build did not produce exactly one shared library')
+        # Copy produced shared library back
+        libfile, = shared_libs
+        _, outext = os.path.splitext(opts.output)
+        if outext == '':
+            _, shext = os.path.splitext(libfile)
+            opts.output += shext
+        shutil.copy(os.path.join(opts.builddir, libfile),
+                    opts.output)
+    finally:
+        # Clean up
+        if not opts.nocleanup:
+            shutil.rmtree(opts.builddir)
 
 def create_cmd(opts):
     pyxdir, _ = os.path.split(os.path.realpath(opts.wrapper_pyx))
@@ -480,6 +543,24 @@ def create_argument_parser():
     subparsers = parser.add_subparsers(title='commands')
 
     #
+    # init command
+    #
+    init = subparsers.add_parser('init')
+    init.set_defaults(func=init_cmd)
+    init.add_argument('--builddir')
+
+    #
+    # compile command
+    #
+    compile = subparsers.add_parser('compile')
+    compile.set_defaults(func=compile_cmd)
+    compile.add_argument('--nocleanup', action='store_true',
+                         help='TODO')
+    compile.add_argument('--builddir')
+    compile.add_argument('-o', '--output')
+    compile.add_argument('fortranfiles', metavar='fortranfile', nargs='+')
+
+    #
     # create command
     #
     create = subparsers.add_parser('create')
@@ -573,3 +654,44 @@ def fwrap_main(args):
 
     return opts.func(opts)
 
+class working_directory(object):
+    """
+    Context manager to temporarily change current working directory
+
+    Example:
+    
+    with working_directory('/tmp'):
+        assertEqual(os.path.basename(os.getcwd()), 'tmp')
+    """
+
+    def __init__(self, dirname, create=False):
+        self.dirname = os.path.realpath(dirname)
+        if not os.path.isdir(self.dirname):
+            if create:
+                os.makedirs(self.dirname)
+            else:
+                raise ValueError("Is not a directory: %s" % self.dirname)
+        self._oldcwd = os.getcwd()
+
+    def __enter__(self):
+        os.chdir(self.dirname)
+        return self.dirname
+
+    def __exit__(self, exc, value, tb):
+        if os.getcwd() != self.dirname:
+            import warnings
+            warnings.warn('Want to exit "%s" by changing to "%s" as we exit the context manager, '
+                          'but the directory was changed to "%s" in the meantime. '
+                          'Proceeding anyway.' % (
+                self.dirname, self._oldcwd, os.getcwd())
+                )
+        os.chdir(self._oldcwd)
+
+    def __call__(self, path):
+        if os.path.isabs(path):
+            return os.path.realpath(path)
+        else:
+            return os.path.realpath(os.path.join(self.dirname, path))
+
+if __name__ == '__main__':
+    sys.exit(fwrap_main(sys.argv[1:]))
