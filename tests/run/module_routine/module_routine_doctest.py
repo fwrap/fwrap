@@ -1,5 +1,5 @@
 import numpy as np
-from module_routine_fwrap import *
+from module_routine import *
 
 __doc__ = u"""
 >>> sub1()

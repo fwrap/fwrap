@@ -24,15 +24,15 @@ def fwrap_fortran_sources(self):
             # Automatically set target name if not provided
             name = node.name[:-len(node.suffix())]
             if not getattr(self, 'target', None):
-                self.target = name + '_fwrap'
+                self.target = name
 
-            pyx = node.change_ext('_fwrap.pyx')
+            pyx = node.change_ext('.pyx')
             typemap_h = node.parent.find_or_declare('fwrap_ktp_header.h')
             typemap_pxd = node.parent.find_or_declare('fwrap_ktp.pxd')
             typemap_pxi = node.parent.find_or_declare('fwrap_ktp.pxi')
 
             if not f77binding:
-                fc_f = node.change_ext('_fwrap_fc' + suffix)
+                fc_f = node.change_ext('_fc' + suffix)
                 ktp = node.parent.find_or_declare('fwrap_type_specs.in')
                 typemap_f = node.parent.find_or_declare('fwrap_ktp_mod' + suffix)
 

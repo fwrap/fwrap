@@ -1,4 +1,4 @@
-from pyf_callbacks_fwrap import *
+from pyf_callbacks import *
 import numpy as np
 
 def twice(x, extra=None):

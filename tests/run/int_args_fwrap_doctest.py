@@ -1,4 +1,4 @@
-from int_args_fwrap import *
+from int_args import *
 
 __doc__ = u'''
 >>> int_args_func(1,2,3) == (10, 6L)

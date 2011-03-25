@@ -1,4 +1,4 @@
-from char_array_fwrap import *
+from char_array import *
 import numpy as np
 
 charr = np.empty((2,3), dtype='|S3', order='F')

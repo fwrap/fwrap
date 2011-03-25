@@ -1,4 +1,4 @@
-from f77callback_fwrap import *
+from f77callback import *
 import numpy as np
 
 def printfoo():

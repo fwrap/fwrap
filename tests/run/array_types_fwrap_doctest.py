@@ -1,4 +1,4 @@
-from array_types_fwrap import *
+from array_types import *
 import numpy as np
 
 real64 = np.empty((2,2), dtype=np.float64, order='F')

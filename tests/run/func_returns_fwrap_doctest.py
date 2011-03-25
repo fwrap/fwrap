@@ -1,4 +1,4 @@
-from func_returns_fwrap import *
+from func_returns import *
 
 def test_rets():
     u'''

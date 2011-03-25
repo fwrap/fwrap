@@ -1,5 +1,5 @@
 import numpy as np
-from array_intents_fwrap import *
+from array_intents import *
 
 N = 2
 arrs = [np.ones((N,N), dtype=np.float32, order='F') for x in range(4)]

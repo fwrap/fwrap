@@ -1,4 +1,4 @@
-from all_ints_fwrap import *
+from all_ints import *
 
 __doc__ = u'''
 >>> int_default(1,2) == (6, 2)

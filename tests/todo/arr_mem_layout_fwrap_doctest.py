@@ -1,4 +1,4 @@
-from arr_mem_layout_fwrap import mem_layout
+from arr_mem_layout import mem_layout
 import numpy as np
 
 __doc__ = u'''

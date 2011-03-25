@@ -1,4 +1,4 @@
-from kind_params_fwrap import *
+from kind_params import *
 
 def test_kind_params():
     '''

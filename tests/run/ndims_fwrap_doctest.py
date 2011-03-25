@@ -1,4 +1,4 @@
-from ndims_fwrap import *
+from ndims import *
 import numpy as np
 
 N = 5

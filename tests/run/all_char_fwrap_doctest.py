@@ -1,4 +1,4 @@
-from all_char_fwrap import *
+from all_char import *
 
 __doc__ = u'''
 >>> char_arg('foobar', 'ch_in')

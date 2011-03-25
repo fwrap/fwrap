@@ -1,4 +1,4 @@
-from dim_expr_fwrap import *
+from dim_expr import *
 import numpy as np
 from numpy import array
 

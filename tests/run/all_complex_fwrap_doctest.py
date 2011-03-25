@@ -1,4 +1,4 @@
-from all_complex_fwrap import *
+from all_complex import *
 
 __doc__ = u'''
 >>> complex_default(1+1j,2+2j) == ((2+2j), (-1-1j))

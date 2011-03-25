@@ -1,4 +1,4 @@
-from all_integer_arrays_fwrap import *
+from all_integer_arrays import *
 import numpy as np
 
 n1, n2 = 3, 4 # see fixed_size before changing

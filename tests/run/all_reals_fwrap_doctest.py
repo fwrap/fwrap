@@ -1,4 +1,4 @@
-from all_reals_fwrap import *
+from all_reals import *
 
 __doc__ = u'''
 >>> real_default(1,2) == (2.0, 3.0)

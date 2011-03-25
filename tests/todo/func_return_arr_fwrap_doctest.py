@@ -1,4 +1,4 @@
-from func_return_arr_fwrap import *
+from func_return_arr import *
 import numpy as np
 
 a, b = 3, 5

@@ -1,4 +1,4 @@
-from explicit_shape_fwrap import *
+from explicit_shape import *
 import numpy as np
 
 

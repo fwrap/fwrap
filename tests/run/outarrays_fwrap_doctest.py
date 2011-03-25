@@ -1,4 +1,4 @@
-from outarrays_fwrap import *
+from outarrays import *
 
 #
 # Check that explicit-shape intent(out) arrays can be

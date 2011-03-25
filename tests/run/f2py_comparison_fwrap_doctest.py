@@ -2,7 +2,7 @@ import os
 if int(os.environ['F2PY']):
     from f2py_comparison_f2py import *
 else:
-    from f2py_comparison_fwrap import *
+    from f2py_comparison import *
 import numpy as np
 
 def raises_error(func, *args, **kw):

@@ -1,4 +1,4 @@
-from array_errors_fwrap import *
+from array_errors import *
 
 __doc__ = u"""
     >>> func(2, 3, 0, 0)

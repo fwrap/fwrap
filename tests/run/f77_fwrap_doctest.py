@@ -1,4 +1,4 @@
-from f77_fwrap import *
+from f77 import *
 import numpy as np
 
 n1, n2 = 3, 4

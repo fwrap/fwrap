@@ -1,4 +1,4 @@
-from use_module_fwrap import *
+from use_module import *
 
 __doc__ = u'''
 >>> user(10.0)

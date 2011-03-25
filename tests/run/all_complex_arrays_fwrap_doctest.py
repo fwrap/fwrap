@@ -1,4 +1,4 @@
-from all_complex_arrays_fwrap import *
+from all_complex_arrays import *
 import numpy as np
 
 n1, n2 = 3, 4

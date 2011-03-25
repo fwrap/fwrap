@@ -1,4 +1,4 @@
-from all_char_arrays_fwrap import *
+from all_char_arrays import *
 import numpy as np
 
 ll, n1, n2 = 6, 3, 4

@@ -1,4 +1,4 @@
-from all_logical_arrays_fwrap import *
+from all_logical_arrays import *
 import numpy as np
 
 n1, n2 = 3, 4

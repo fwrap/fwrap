@@ -1,4 +1,4 @@
-from all_logicals_fwrap import *
+from all_logicals import *
 
 __doc__ = u'''
 >>> log_default(1,0) == (0, 0)

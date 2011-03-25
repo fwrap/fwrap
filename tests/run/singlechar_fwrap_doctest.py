@@ -1,4 +1,4 @@
-from singlechar_fwrap import *
+from singlechar import *
 import numpy as np
 
 __doc__ = """

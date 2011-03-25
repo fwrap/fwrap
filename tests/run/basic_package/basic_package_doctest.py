@@ -1,5 +1,5 @@
-from basic_package_fwrap import foomod
-from basic_package_fwrap import barmod
+from basic_package import foomod
+from basic_package import barmod
 
 
 __doc__ = u"""

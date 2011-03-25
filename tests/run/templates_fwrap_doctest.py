@@ -1,4 +1,4 @@
-from templates_fwrap import *
+from templates import *
 import numpy as np
 from pprint import pprint
 
