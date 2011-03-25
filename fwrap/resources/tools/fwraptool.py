@@ -24,7 +24,7 @@ def fwrap_fortran_sources(self):
             # Automatically set target name if not provided
             name = node.name[:-len(node.suffix())]
             if not getattr(self, 'target', None):
-                self.target = name
+                self.target = name + '_fwrap'
 
             pyx = node.change_ext('_fwrap.pyx')
             typemap_h = node.parent.find_or_declare('fwrap_ktp_header.h')
