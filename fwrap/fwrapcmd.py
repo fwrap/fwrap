@@ -533,6 +533,19 @@ def no_project_response(opts):
                         PROJECT_FILE)
     return 1
 
+def print_version():
+    # TODO: include this information
+    from fwrap.version import get_version
+    vandl = """\
+fwrap v%s
+Copyright (C) 2010 Kurt W. Smith
+Fwrap is distributed under an open-source license.   See the source for
+licensing information.  There is NO warranty, not even for MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.
+""" % get_version()
+    print vandl
+
+
 def create_argument_parser():
     parser = argparse.ArgumentParser(prog='fwrap',
                                      description='fwrap command line tool')

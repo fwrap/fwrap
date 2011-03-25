@@ -180,40 +180,35 @@ class FwrapCompileTestCase(unittest.TestCase):
             self.compile_fwrap(source_files, pyf_file)
 
     def compile_fwrap(self, source_files, pyf_file):
-        if '--package' in self.configure_flags:            
+        from fwrap.fwrapcmd import fwrap_main
+        from subprocess import check_call
+        conf_flags = self.configure_flags
+        if '--package' in conf_flags:
             assert pyf_file is None
-            from fwrap.fwrapcmd import fwrap_main
-            from subprocess import check_call
             # Create Cython wrapper
-            flags = [x for x in self.configure_flags if x != '--package']
-            fwrap_main(['createpackage', '--copy-sources', '-o', self.projdir] + flags +
+            conf_flags = [x for x in conf_flags if x != '--package']
+            fwrap_main(['createpackage', '--copy-sources', '-o', self.projdir] +
                        [self.projname] + source_files)
-            py_exe = sys.executable
-            cwd = os.getcwd()
-            try:
-                os.chdir(self.projdir)
-                check_call([py_exe, 'waf',
-                            'configure', '--inplace',
-                            'build', 'install'])
-            finally:
-                os.chdir(cwd)
         else:
-            from fwrap.fwrapc import fwrapc
-            # fwrapc.py configure build fsrc...
-            conf_flags = self.configure_flags
-            if pyf_file is not None:
-                conf_flags.append('--pyf=%s' % pyf_file)
-            try:
-                os.environ['FWRAPFLAGS'] = ' '.join(conf_flags)
-                argv = ['configure', 'build',
-                       '--inplace',
-                       '--name=%s' % self.projname,
-                       '--outdir=%s' % self.projdir]
-                argv += source_files
-                argv += ['install']
-                fwrapc(argv=argv)
-            finally:
-                del os.environ['FWRAPFLAGS']
+            # Call init and copy sources
+            fwrap_main(['init', '--builddir', self.projdir])
+            for source in source_files:
+                shutil.copy(source, self.projdir)
+
+        if pyf_file is not None:
+            conf_flags.append('--pyf=%s' % pyf_file)
+        py_exe = sys.executable
+        cwd = os.getcwd()
+        try:
+            os.environ['FWRAPFLAGS'] = ' '.join(conf_flags)
+            os.chdir(self.projdir)
+            check_call([py_exe, 'waf',
+                        'configure', '--inplace',
+                        'build', 'install'])
+        finally:
+            del os.environ['FWRAPFLAGS']
+            os.chdir(cwd)
+
 
     def compile_f2py(self, source_files, pyf_file):
         from numpy.f2py.f2py2e import main as f2pymain
