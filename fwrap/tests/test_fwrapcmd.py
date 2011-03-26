@@ -60,7 +60,3 @@ def test_compile():
     dump_f90()
     fwrap('compile test.f90')
     so = load('test.so')
-    # Check the self-sha1
-    sha = configuration.get_self_sha1(so)
-    ok_(sha in so)
-    eq_(sha, configuration.get_self_sha1(so.replace(sha, 'FOO')))
