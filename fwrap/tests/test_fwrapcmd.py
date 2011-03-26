@@ -3,6 +3,7 @@
 # All rights reserved. See LICENSE.txt.
 #------------------------------------------------------------------------------
 
+from subprocess import Popen, PIPE
 from textwrap import dedent
 from nose.tools import ok_, eq_, set_trace, assert_raises, with_setup
 
@@ -58,5 +59,7 @@ with_tempdir = with_setup(setup_tempdir, teardown_tempdir)
 @with_tempdir
 def test_compile():
     dump_f90()
-    fwrap('compile test.f90')
-    so = load('test.so')
+    out = fwrap('compile test.f90', fail=True)
+    cmd = ['python', '-c', 'dfoo(2)']
+    pp = Popen(cmd, stdout=PIPE, stderr=PIPE)
+    eq_(4, pp.stdout.read())
