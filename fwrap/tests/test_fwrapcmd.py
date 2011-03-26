@@ -16,6 +16,15 @@ def dump(filename, contents, mode='w'):
     with file(filename, mode) as f:
         f.write(dedent(contents))
 
+def fwrap(args, fail=False):
+    args = ['fwrap'] + args.split()
+    if fail:
+        retcode, result, err = git.execproc_canfail(args)
+        ok_(retcode != 0)
+    else:
+        result, err = git.execproc(args, get_err=True)
+    return result + '\n' + err
+
 def dump_f90(name='foo'):
     dump('test.f90', '''
     subroutine s%(name)s(x)
@@ -31,6 +40,22 @@ def dump_f90(name='foo'):
     end subroutine
     ''' % dict(name=name))
 
+def setup_tempdir():
+    global temprepo, _keeprepo
+    _keeprepo = False
+    temprepo = tempfile.mkdtemp(prefix='fwraptests-')    
+    os.chdir(temprepo)
+
+def teardown_tempdir():
+    global temprepo, _keeprepo
+    if not _keeprepo:
+        shutil.rmtree(temprepo)
+    else:
+        print 'Please inspect and remove %s' % temprepo
+
+with_tempdir = with_setup(setup_tempdir, teardown_tempdir)
+
+@with_tempdir
 def test_compile():
     dump_f90()
     fwrap('compile test.f90')
