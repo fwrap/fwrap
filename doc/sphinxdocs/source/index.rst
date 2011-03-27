@@ -79,6 +79,9 @@ while developing.
 
    doc/compatibility
 
+`The Fwrap tutorial <tutorial.html>`_ covers the basics of generating Python
+wrappers for Fortran code for various use cases.
+
 We host the latest version of the documentation 
 `on Read The Docs <http://fwrap.readthedocs.org/>`_.
 
