@@ -61,7 +61,7 @@ Bug reports, Wiki & Mailing list
 Development
 ===========
 
-`Git repository <http://github.com/kwmsmith/fwrap>`_
+`Git repository <http://github.com/fwrap/fwrap>`_
     To get the latest development version
 
 `Development blog <http://fortrancython.wordpress.com/>`_
