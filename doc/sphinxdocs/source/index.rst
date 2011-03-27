@@ -79,6 +79,9 @@ while developing.
 
    doc/compatibility
 
+We host the latest version of the documentation 
+`on Read The Docs <http://fwrap.readthedocs.org/>`_.
+
 Some helpful links
 ------------------
 
