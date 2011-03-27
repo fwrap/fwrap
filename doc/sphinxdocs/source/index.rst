@@ -74,13 +74,14 @@ Documentation
 these documents mostly serve as a place to dump notes
 while developing.
 
+`The tutorial <doc/tutorial.html>`_ covers the basics of generating
+Python wrappers for Fortran code for various use cases.
+
 .. toctree::
    :maxdepth: 2
 
+   doc/tutorial
    doc/compatibility
-
-`The Fwrap tutorial <tutorial.html>`_ covers the basics of generating Python
-wrappers for Fortran code for various use cases.
 
 We host the latest version of the documentation 
 `on Read The Docs <http://fwrap.readthedocs.org/>`_.
