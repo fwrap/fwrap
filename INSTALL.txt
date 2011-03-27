@@ -6,7 +6,7 @@ You first need to install fparser, then you can install fwrap.
 Install fparser
 ---------------
 
-From the f2py mercurial repository::
+From the fwrap root git repository::
 
     hg clone http://f2py.googlecode.com/hg/ f2py
     ln -s ../f2py/fparser fwrap/fparser
@@ -26,4 +26,4 @@ OR
 
 2. If you prefer not to modify your Python installation, arrange for the
    directory containing this file (INSTALL.txt) to be in your PYTHONPATH. On
-   Unix, also put the bin directory on your PATH.
+   unix, also put the bin directory on your PATH.
