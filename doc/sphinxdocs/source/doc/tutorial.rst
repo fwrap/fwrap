@@ -22,3 +22,31 @@ There are several ways to generate ``.pyx`` and ``so`` files for Fortran code
 using fwrap.  This tutorial describes shortly three use cases and provides an
 introduction to the basic commands.
 
+Use Case 1
+~~~~~~~~~~
+
+This use case describes how to compile an existing Fortran code
+using ``fwrap compile``. First create an empty directory by typing: ::
+
+        mkdir project4py
+        cd project4py
+
+The ``init`` command dumps the ``waf``, ``wscript`` and ``tools`` subdirectories in
+the current directory. ::
+
+        fwrap init
+        fwrap createpackage project /path/to/project/src/f90/*.f90
+        find
+        project/project_types.pyx
+        project/__init__.py
+        ./waf configure --with-project=/my/compiled/project
+        wscript
+
+Finally run the ``compile`` command to build the Cython ``.pyx`` files. ::
+
+        fwrap compile ...
+        myproject-1.3.4/myproject/__init__.py
+        myproject-1.3.4/myproject/somefuncs.py
+        myproject-1.3.4/myproject/otherfuncs.f90
+
+
