@@ -35,14 +35,20 @@ The ``init`` command dumps the ``waf``, ``wscript`` and ``tools`` subdirectories
 the current directory. ::
 
         fwrap init
+
+This command illustrates how to to build the Cython ``.pyx`` files. ::
+
         fwrap createpackage project /path/to/project/src/f90/*.f90
         find
         project/project_types.pyx
         project/__init__.py
+
+Then run ``waf`` to configure and build the project in the desired location. ::
+
         ./waf configure --with-project=/my/compiled/project
         wscript
 
-Finally run the ``compile`` command to build the Cython ``.pyx`` files. ::
+Finally run the ``compile`` command. ::
 
         fwrap compile ...
         myproject-1.3.4/myproject/__init__.py
