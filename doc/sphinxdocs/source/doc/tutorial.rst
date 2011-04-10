@@ -17,3 +17,8 @@ automatically.
 
 Examples
 --------
+
+There are several ways to generate ``.pyx`` and ``so`` files for Fortran code
+using fwrap.  This tutorial describes shortly three use cases and provides an
+introduction to the basic commands.
+
